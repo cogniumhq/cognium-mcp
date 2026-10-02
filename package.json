@@ -15,7 +15,9 @@
     "lint": "eslint .",
     "check:pins": "node scripts/check-pins.mjs",
     "test:scripts": "node --test 'scripts/*.test.mjs'",
-    "release:check": "npm run lint && npm run test:scripts && npm run build && npm run typecheck && npm run test:coverage && npm run check:pins && node scripts/release-check.mjs"
+    "release:check": "npm run lint && npm run test:scripts && npm run build && npm run typecheck && npm run test:coverage && npm run publish:gate",
+    "check:train": "node scripts/check-release-train.mjs",
+    "publish:gate": "node scripts/publish-gate.mjs"
   },
   "author": {
     "name": "Cognium Labs",

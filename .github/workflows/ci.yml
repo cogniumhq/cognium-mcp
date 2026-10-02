@@ -120,6 +120,19 @@ jobs:
       # Reads the manifest, the lockfile and the changelog; needs no install.
       - run: npm run check:pins
 
+  release-train:
+    name: release train — a module on the pinned circle-ir minor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check:train
+
   install:
     name: install + same tools as the last release
     runs-on: ubuntu-latest
@@ -142,6 +155,26 @@ jobs:
           npm pack --workspace packages/mcp-server --pack-destination "$RUNNER_TEMP" >/dev/null
           tarball="$(ls "$RUNNER_TEMP"/cognium-mcp-server-*.tgz)"
           node scripts/verify-install.mjs "$tarball" --same-tools-as @cognium/mcp-server@latest
+
+  publish-gate:
+    name: publish gate — every required check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # The same list `npm publish` runs through `prepublishOnly`, so a pull
+    # request and a publish cannot disagree about what is required. Publishing
+    # itself stays by hand: nothing here publishes.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: What is required, and why
+        run: node scripts/publish-gate.mjs --list
+      - name: Every required check
+        run: npm run publish:gate
 
   self-scan:
     name: self-scan (SAST)
