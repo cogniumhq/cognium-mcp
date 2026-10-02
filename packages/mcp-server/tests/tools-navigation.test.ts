@@ -198,6 +198,52 @@ describe('find_callers / find_callees', () => {
   });
 });
 
+describe('the denominator is honest on a mixed-language project', () => {
+  // The first graded record's `:denominator-stated` deviation was observed
+  // here, on the server's own answer: the walk collects every language it can
+  // detect, so a repository with TypeScript and Python next to Java had the
+  // answer claiming four languages searched while one was resolved. A caller
+  // dividing answers by files searched got a ratio about nothing.
+  let root: string;
+  let ctx: ToolContext;
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'cognium-mcp-mixed-'));
+    mkdirSync(join(root, 'app'), { recursive: true });
+    mkdirSync(join(root, 'web'), { recursive: true });
+    for (const [rel, src] of Object.entries(FILES)) writeFileSync(join(root, rel), src, 'utf8');
+    writeFileSync(
+      join(root, 'web', 'app.ts'),
+      'export function hello(n: string) { return greet(n); }\nfunction greet(n: string) { return "hi " + n; }\n',
+      'utf8',
+    );
+    writeFileSync(join(root, 'web', 'run.py'), 'def main():\n    return helper()\ndef helper():\n    return 2\n', 'utf8');
+    ctx = { cache: new ProjectCache(2), enablement: floorEnablement() };
+  });
+
+  it('names only the language it resolves, and counts only those files', async () => {
+    const p = payload(await makeFindCallersHandler(ctx)({ project_root: root, symbol: 'app.Config.url' }));
+    const scope = p.scope as { searched: { files: number; languages: string[] } };
+
+    expect(scope.searched.languages).toEqual(['java']);
+    expect(scope.searched.files).toBe(Object.keys(FILES).length);
+  });
+
+  it('declines the other languages by name, with the vocabulary reason', async () => {
+    const p = payload(await makeFindCallersHandler(ctx)({ project_root: root, symbol: 'app.Config.url' }));
+    const scope = p.scope as { excluded: Array<{ pattern: string; reason: string }> };
+
+    const declined = scope.excluded.filter((e) => e.reason.startsWith('unsupported-language'));
+    expect(declined.map((e) => e.pattern).sort()).toEqual(['python', 'typescript']);
+    for (const e of declined) expect(e.reason).toContain('java');
+  });
+
+  it('still answers correctly about the language it does resolve', async () => {
+    const p = payload(await makeFindCallersHandler(ctx)({ project_root: root, symbol: 'app.Config.url' }));
+    expect((p.answers as unknown[]).length).toBe(1);
+  });
+});
+
 describe('the suggested next step', () => {
   const base = {
     query: { kind: 'callers' as const, symbol: 'x' },
