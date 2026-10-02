@@ -7,8 +7,8 @@ package: "@cognium/mcp-server"          # packages/mcp-server
 role: product
 jurisdictions: []                        # no law is claimed; the specifications below gate only because the owner adopts them
 adopted:
-  - { instrument: mcp@2026-07-28, owner: "<principal, on merge>", date: "<merge date>" }
-  - { instrument: json-rpc@2.0, owner: "<principal, on merge>", date: "<merge date>" }
+  - { instrument: mcp@2026-07-28, owner: "human:eyal", date: "2026-10-01" }
+  - { instrument: json-rpc@2.0, owner: "human:eyal", date: "2026-10-01" }
 claimed-scope:
   targets: [T12]                         # Linux · Node 24
   states: [floor, extended, commercial]
