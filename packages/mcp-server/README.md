@@ -127,6 +127,45 @@ common one, not that the answer is poor.
 `scope` states what was searched and what was skipped, so a count can be read
 against its denominator, and `truncated` appears whenever a list was cut.
 
+### What the tiers measure
+
+The navigation tools resolve **Java**. A file in another language is reported
+as `unsupported-language` and is not counted in `scope.searched`, so an answer
+never implies a language was searched when it was not.
+
+These numbers come from an independent evaluation against compiler-backed
+ground truth — a sample of call sites in [WebGoat](https://github.com/WebGoat/WebGoat),
+each site's callee resolved by the Eclipse JDT compiler, with a pinned
+[ripgrep](https://github.com/BurntSushi/ripgrep) answering the same queries as
+a baseline. Every figure carries its denominator, and the baseline is on the
+same line so the comparison is visible rather than asserted.
+
+| | this server | ripgrep baseline |
+| --- | --- | --- |
+| `exact` precision | **100 %** of 143 answers that landed on a resolved site | — (it claims no `exact`) |
+| `inferred` precision | 26.7 % of 15 | 60.6 % of 711 |
+| recall, all sampled sites | 34.0 % (159 of 467) | 92.3 % (431 of 467) |
+| recall, targets declared in the repository | 79.6 % (148 of 186) | 93.5 % (174 of 186) |
+
+Two of those rows need reading together rather than separately. **Recall over
+all sampled sites is capped at 39.8 % for any tool that answers from an
+index**, because only 186 of the 467 sampled sites have a target declared
+inside the repository at all; the rest are in the JDK or a library. A text
+search answers about a name wherever it is declared, so the two columns of
+that row are answering different questions. The row below it — targets
+declared in the repository — is the one where both columns answer the same
+question.
+
+**An `inferred` answer is not evidence that a call happens.** It is a method
+name that matched with no receiver type to confirm it, and on this sample it
+was right 26.7 % of the time. Treat it as a lead to check by opening the site,
+never as a caller. That is why it is a separate tier rather than a weaker
+`exact`: the label is the warning, and the tool will not promote it.
+
+What `exact` is worth is the other half of the same point: of the 143 `exact`
+answers that landed on a site the compiler had resolved, **143 named the
+compiler's callee and none contradicted it.**
+
 ## Using it as a library
 
 The package is side-effect free to import: nothing is built, read or connected
