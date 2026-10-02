@@ -147,14 +147,11 @@ jobs:
     name: self-scan (SAST)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Not gating yet. The scanner is deliberately a *published* release of the
-    # CLI, never the engine this build is testing, so the product is not
-    # marking its own homework. But every CLI release so far parses `.ts`
-    # with the JavaScript grammar (cogniumhq/cognium-dev#409) and so reports
-    # one false critical here: a `sql_injection` on a Map lookup in
-    # src/cache.ts. A CLI built from the fix scans this tree clean. Drop
-    # `continue-on-error` when SELF_SCAN_CLI moves to a release with the fix.
-    continue-on-error: true
+    # The scanner is a published release of the CLI, never the engine this
+    # build is testing, so the product is not marking its own homework.
+    # scripts/self-scan.mjs fails on any high or critical finding that is not
+    # on its exception list, and fails as well when an exception no longer
+    # matches anything — the list cannot outlive the defect it was written for.
     env:
       SELF_SCAN_CLI: cognium-dev@4.9.29
     steps:
@@ -163,7 +160,7 @@ jobs:
         with:
           node-version: '22'
       - name: Gate on high/critical
-        run: npx --yes "$SELF_SCAN_CLI" scan packages/mcp-server/src --severity high
+        run: node scripts/self-scan.mjs
       - name: Full report (advisory)
         if: ${{ !cancelled() }}
         continue-on-error: true
