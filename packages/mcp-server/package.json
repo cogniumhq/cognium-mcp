@@ -1,6 +1,6 @@
 {
   "name": "@cognium/mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Model Context Protocol server exposing the circle-ir SAST engine as structured tools for LLM agents (Claude Desktop, Claude Code, Cursor, cognium-ai).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -48,12 +48,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cogniumhq/cognium-dev.git",
+    "url": "git+https://github.com/cogniumhq/cognium-mcp.git",
     "directory": "packages/mcp-server"
   },
-  "homepage": "https://github.com/cogniumhq/cognium-dev/tree/main/packages/mcp-server#readme",
+  "homepage": "https://github.com/cogniumhq/cognium-mcp/tree/main/packages/mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/cogniumhq/cognium-dev/issues"
+    "url": "https://github.com/cogniumhq/cognium-mcp/issues"
   },
   "engines": {
     "node": ">=20.19.0"

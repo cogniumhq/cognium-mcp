@@ -4,6 +4,31 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-02
+
+Tested against `circle-ir` **4.9.29** (range `4.9`), MCP SDK **^1.30.1** and the
+`circle-ir-ai/mcp` module **4.17.0**. No tool was added, removed or renamed and
+no schema changed: `tools/list` is identical to 0.2.0.
+
+### Changed
+- **The package moved to its own repository,
+  [cogniumhq/cognium-mcp](https://github.com/cogniumhq/cognium-mcp)**, with its
+  history. The npm name, the bin name and everything the package exports are
+  unchanged; only `repository`, `homepage` and `bugs` in the manifest point
+  somewhere new. Issue numbers in earlier entries of this file refer to
+  [cogniumhq/cognium-dev](https://github.com/cogniumhq/cognium-dev), where the
+  package lived until 0.2.0.
+
+### Added
+- A test that sends one fixed set of requests over stdio and over streamable
+  HTTP and compares the responses byte for byte, with an optional module loaded
+  on both.
+
+### Fixed
+- The README told a reader running from a clone to start `dist/index.js`. Since
+  0.2.0 that file is the side-effect-free library entry and starts nothing; the
+  binary is `dist/bin.js`.
+
 ## [0.2.0] - 2026-10-01
 
 Tested against `circle-ir` **4.9.29** (range `4.9`) and MCP SDK **^1.30.1**. No

@@ -17,7 +17,7 @@ OpenAI does **not** accept local stdio MCP. A full “With MCP” listing needs 
 | License | MIT (free; not GPL) | |
 | Contact | hello@cognium.net | |
 
-Logotype (after merge to `main`): `https://raw.githubusercontent.com/cogniumhq/cognium-dev/main/plugins/cognium-dev/assets/logo.svg`
+Logotype (after merge to `main`): `https://raw.githubusercontent.com/cogniumhq/cognium-mcp/main/plugins/cognium-dev/assets/logo.svg`
 
 ## Portal steps (Skills only)
 

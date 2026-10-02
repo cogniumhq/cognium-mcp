@@ -14,12 +14,12 @@ Ships every deterministic capability of circle-ir — polyglot taint analysis, c
 npm install -g @cognium/mcp-server
 ```
 
-Or run in-place from this monorepo:
+Or run in place from a clone of this repository:
 
 ```bash
-cd packages/mcp-server
+npm install
 npm run build
-node dist/index.js
+node packages/mcp-server/dist/bin.js
 ```
 
 ## Client configuration
@@ -167,8 +167,13 @@ decides what is *listed*, and the terms carry the grant.
 ```bash
 npm run build       # tsc + chmod +x dist/bin.js
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run (unit, three-state matrix, stdio smoke)
+npm test            # vitest run (unit, three-state matrix, one answer, stdio smoke)
 ```
+
+Two suites drive the built binary, so build before testing. From the repository
+root, `npm run check:pins` checks the `circle-ir` pin and
+`node scripts/verify-install.mjs <tarball>` installs a packed build into an
+empty directory and checks what it serves.
 
 ## License
 

@@ -31,12 +31,16 @@ export default defineConfig({
       // depends on permissions; measured the same day at
       // 94.33 stmts / 85.18 branches / 97.01 funcs / 96.42 lines.
       //
+      // Re-measured 2026-10-02 in this repository, with the one-answer test:
+      // 94.60 stmts / 85.55 branches / 98.50 funcs / 96.73 lines. Branches
+      // and functions ratcheted.
+      //
       // What remains is mostly describe-source.ts, attack-surface-summary's
       // roll-up branches and the list-entry-points framework branches.
       thresholds: {
         statements: 94,
-        branches: 84,
-        functions: 96,
+        branches: 85,
+        functions: 97,
         lines: 96,
       },
     },

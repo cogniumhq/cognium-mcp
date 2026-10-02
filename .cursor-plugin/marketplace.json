@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Official Cursor plugins for Cognium SAST (cognium-dev / circle-ir).",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "pluginRoot": "plugins"
   },
   "plugins": [

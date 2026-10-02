@@ -2,18 +2,18 @@
 
 MIT-licensed plugin for **cognium-dev**, the OSS SAST scanner from [Cognium Labs](https://cognium.dev). After install, the model can run deterministic taint analysis through [`@cognium/mcp-server`](https://www.npmjs.com/package/@cognium/mcp-server), explain findings, and propose sanitizer-backed **defensive** fixes.
 
-This package is **authored** in this monorepo. It is **not** listed on Cursor Marketplace, Claude’s community directory, or OpenAI’s plugin directory until someone submits it.
+This package is **authored** in this repository, next to the MCP server it drives. It is **not** listed on Cursor Marketplace, Claude’s community directory, or OpenAI’s plugin directory until someone submits it.
 
 - Homepage: https://cognium.dev
-- Repository: https://github.com/cogniumhq/cognium-dev
+- Repository: https://github.com/cogniumhq/cognium-mcp
 - License: **MIT** (free, public-repo-friendly; not GPL)
-- Identifier: `cognium-dev` (v0.1.0)
+- Identifier: `cognium-dev` (v0.1.1)
 - Logotype (1:1 SVG, solid `#0B1220` plate): [`assets/logo.svg`](./assets/logo.svg)
 
 After this lands on `main`, the raw GitHub URL for marketplace forms is:
 
 ```
-https://raw.githubusercontent.com/cogniumhq/cognium-dev/main/plugins/cognium-dev/assets/logo.svg
+https://raw.githubusercontent.com/cogniumhq/cognium-mcp/main/plugins/cognium-dev/assets/logo.svg
 ```
 
 That URL 404s until the plugin is merged to `main`.
@@ -89,20 +89,20 @@ Cursor **manually reviews** public marketplace listings. The GitHub repository m
 On Teams / Enterprise:
 
 1. Dashboard → **Plugins** → **Add Marketplace** → **Import from Repo**
-2. Import https://github.com/cogniumhq/cognium-dev
+2. Import https://github.com/cogniumhq/cognium-mcp
 3. Cursor reads [`.cursor-plugin/marketplace.json`](../../.cursor-plugin/marketplace.json) at the repo root and loads `plugins/cognium-dev`
 
-Importing this repository clones the full cognium-dev monorepo (SAST engine, WASM grammars, tests). That is fine for team import. For official public marketplace review, a slim dedicated public repo may be easier for reviewers. Canonical plugin files remain in this package.
+This repository holds only the MCP server and this plugin, so an import clones nothing else. The SAST engine itself lives in [cogniumhq/cognium-dev](https://github.com/cogniumhq/cognium-dev) and reaches the plugin through the published `@cognium/mcp-server` package.
 
 ### Cursor local test (`~/.cursor/plugins/local`)
 
 From [Cursor plugin docs](https://cursor.com/docs/plugins):
 
-1. Copy or symlink **this plugin directory** (the folder that contains `.cursor-plugin/plugin.json`), not the monorepo root:
+1. Copy or symlink **this plugin directory** (the folder that contains `.cursor-plugin/plugin.json`), not the repository root:
 
    ```bash
    mkdir -p ~/.cursor/plugins/local
-   ln -s /path/to/cognium-dev/plugins/cognium-dev ~/.cursor/plugins/local/cognium-dev
+   ln -s /path/to/cognium-mcp/plugins/cognium-dev ~/.cursor/plugins/local/cognium-dev
    ```
 
 2. Reload the window: **Developer: Reload Window**
@@ -115,7 +115,7 @@ On Teams and Enterprise, admins must allow **Allow Local Plugin Imports**. If a 
 Add this GitHub repo as a marketplace, then install the plugin:
 
 ```text
-/plugin marketplace add cogniumhq/cognium-dev
+/plugin marketplace add cogniumhq/cognium-mcp
 /plugin install cognium-dev@cognium
 ```
 
@@ -199,7 +199,7 @@ https://developers.openai.com/plugins/guides/submit-claude-plugin
 ## Layout
 
 ```
-cognium-dev/                            # git root
+cognium-mcp/                            # git root
 ├── .cursor-plugin/marketplace.json     # Cursor team marketplace
 ├── .claude-plugin/marketplace.json     # Claude Code marketplace (name: cognium)
 └── plugins/cognium-dev/
