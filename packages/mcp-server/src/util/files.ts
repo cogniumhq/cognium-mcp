@@ -27,8 +27,15 @@ const LANG_MAP: Record<string, SupportedLanguage> = {
   '.htm': 'html',
 };
 
-/** Directories skipped during recursive collection. */
-const SKIP_DIRS = new Set([
+/**
+ * Directories skipped during recursive collection.
+ *
+ * Exported because a navigation answer has to state its own denominator: a
+ * caller told "3 callers" is entitled to know that `node_modules` and `dist`
+ * were never looked in. The list is the single source for both the walk and
+ * the `scope.excluded` the answer carries.
+ */
+export const SKIPPED_DIRECTORIES: readonly string[] = [
   'node_modules',
   '.git',
   'dist',
@@ -42,7 +49,9 @@ const SKIP_DIRS = new Set([
   'venv',
   '.tox',
   '.pytest_cache',
-]);
+];
+
+const SKIP_DIRS = new Set(SKIPPED_DIRECTORIES);
 
 export function detectLanguage(filePath: string): SupportedLanguage | null {
   const ext = extname(filePath).toLowerCase();

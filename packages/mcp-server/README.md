@@ -76,6 +76,8 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `describe_sink` | CWE, remediation, CVSS-like severity, and sanitizer list for a sink category. |
 | `describe_source` | Every framework API pattern circle-ir treats as a source of a given category. |
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
+| `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
+| `find_callees` | What a method calls, with the same tiers and reasons. Java. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ## Resources
@@ -95,6 +97,35 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 3. Iterate over the highest-severity findings with `explain_finding` for CWE context.
 4. `find_similar` to catch the same pattern elsewhere.
 5. Before proposing a fix, `check_sanitizer` any proposed wrapper against the target sink type.
+6. Before changing a method, `find_callers` on it to see what depends on it.
+
+## Reading a navigation answer
+
+`find_callers` and `find_callees` report a **tier** on every answer and a
+**reason** on every call site they could not resolve, because a caller list is
+only useful if you know whether it is complete.
+
+| Tier | What it means |
+| ---- | ------------- |
+| `exact` | The receiver's static type was known and the target was unique in it. Act on these. |
+| `polymorphic` | Dispatch is open. `candidates` lists every implementation that could run, and `target` is the declaring member. |
+| `inferred` | Bound by the method name alone, with no receiver type to confirm it. **A lead to check, never a caller.** |
+
+`inferred` is a floor and is never promoted. It is also never produced when a
+receiver's type *is* known and lacks the method: on a 405-file Java
+repository, 78 of 147 name-only "callers" of one method had a receiver whose
+own declared type could not have had it, so that case is now no answer plus a
+reason rather than a weak answer.
+
+Every non-answer carries one of `external` (the target is outside the searched
+tree — the JDK, a framework), `dynamic` (reflection), `generated` (the member
+only exists after annotation processing, such as a Lombok accessor),
+`parse-error`, `unsupported-language`, or `unknown` (in the tree, and the call
+graph could not bind it). A large `external` count usually means the name is a
+common one, not that the answer is poor.
+
+`scope` states what was searched and what was skipped, so a count can be read
+against its denominator, and `truncated` appears whenever a list was cut.
 
 ## Using it as a library
 

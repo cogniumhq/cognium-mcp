@@ -31,6 +31,12 @@ import { attackSurfaceSummaryConfig, makeAttackSurfaceSummaryHandler } from './t
 import { listReachableSinksConfig, makeListReachableSinksHandler } from './tools/list-reachable-sinks.js';
 import { findSimilarConfig, makeFindSimilarHandler } from './tools/find-similar.js';
 import { refreshConfig, makeRefreshHandler } from './tools/refresh.js';
+import {
+  findCallersConfig,
+  makeFindCallersHandler,
+  findCalleesConfig,
+  makeFindCalleesHandler,
+} from './tools/navigation.js';
 
 const require_ = createRequire(import.meta.url);
 
@@ -91,6 +97,8 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   server.registerTool('attack_surface_summary', attackSurfaceSummaryConfig, makeAttackSurfaceSummaryHandler(ctx) as never);
   server.registerTool('list_reachable_sinks', listReachableSinksConfig, makeListReachableSinksHandler(ctx) as never);
   server.registerTool('find_similar', findSimilarConfig, makeFindSimilarHandler(ctx) as never);
+  server.registerTool('find_callers', findCallersConfig, makeFindCallersHandler(ctx) as never);
+  server.registerTool('find_callees', findCalleesConfig, makeFindCalleesHandler(ctx) as never);
   server.registerTool('refresh', refreshConfig, makeRefreshHandler(ctx) as never);
 
   registerResources(server);
