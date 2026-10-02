@@ -4,6 +4,52 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-02
+
+Tested against `circle-ir` **4.9.29** (range `4.9`), MCP SDK **^1.30.1** and the
+`circle-ir-ai/mcp` module **4.17.0**. No tool was removed or renamed and no
+input schema changed.
+
+### Added
+- **Every tool declares annotations.** Ten of the eleven tools declare
+  `readOnlyHint: true`; all declare `destructiveHint: false`,
+  `idempotentHint: true` and `openWorldHint: false`. They read the project they
+  are pointed at and nothing else: no file is written or deleted and nothing
+  leaves the machine. `refresh` declares `readOnlyHint: false` — it touches no
+  file, but it drops entries from the server's in-memory cache, which is a
+  change of state. A test holds the read-only claim to what a call does: after
+  every tool has run, the analysed project is byte-for-byte as it was.
+- **Every successful response carries `provenance`.** It is `"deterministic"`
+  for all eleven tools, and it is the last field of the JSON body. A response
+  from an optional module that used a model says `llm: <model>` instead, so a
+  client can read how an answer was produced rather than infer it from the
+  tool's name. Error results carry none.
+- **`circle-ir-ai` is declared as an optional peer dependency** (`>=4.17.0`).
+  Nothing changes at runtime: the server still looks for `circle-ir-ai/mcp` at
+  startup and runs without it. The declaration lets npm warn when a
+  `circle-ir-ai` too old to carry the module is installed next to the server.
+- A `default` condition on the package's `exports`, so
+  `require.resolve('@cognium/mcp-server')` finds the entry. The package is still
+  ESM only.
+
+### Changed
+- **A request with malformed parameters is answered `-32602`, not `-32603`.**
+  `tools/call` with a non-string `name`, with `arguments` that are not an
+  object, or with no `params`, and `resources/read` with no `uri`, used to
+  come back as an internal error carrying the validator's raw issue list. They
+  now get the code JSON-RPC reserves for invalid parameters and one line that
+  names the field: `Invalid params for tools/call: params.name: …`. A client
+  that matched on `-32603` for these should match on `-32602`.
+
+  Unchanged: an unknown method is `-32601`; a well-formed call to a tool with
+  wrong arguments is a tool result with `isError: true`, not a protocol error.
+
+#### Consumer Impact
+- **A consumer that compares a whole response body with a stored one** — a
+  snapshot test, a cache keyed on the response text — sees every successful
+  response change, because of the added `provenance` field. Nothing is removed
+  or renamed, so a consumer that reads fields by name is unaffected.
+
 ## [0.2.1] - 2026-10-02
 
 Tested against `circle-ir` **4.9.29** (range `4.9`), MCP SDK **^1.30.1** and the

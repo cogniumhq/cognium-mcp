@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { checkPins } from './check-pins.mjs';
 
 /** Build a throwaway repo with the three files the check reads. */
-function repo({ pin = '4.9.29', version = '0.2.1', locked = { 'node_modules/circle-ir': '4.9.29' }, changelog } = {}) {
+const SDK = 'node_modules/@modelcontextprotocol/sdk';
+
+function repo({ pin = '4.9.29', version = '0.2.1', locked = { 'node_modules/circle-ir': '4.9.29', [SDK]: '1.31.0' }, changelog } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'check-pins-'));
   mkdirSync(join(root, 'packages', 'mcp-server'), { recursive: true });
   writeFileSync(
@@ -52,20 +54,45 @@ test('rejects a missing dependency', () => {
 
 test('rejects a second copy in the lockfile', () => {
   const problems = check({
-    locked: { 'node_modules/circle-ir': '4.9.29', 'node_modules/some-module/node_modules/circle-ir': '4.9.28' },
+    locked: {
+      'node_modules/circle-ir': '4.9.29',
+      'node_modules/some-module/node_modules/circle-ir': '4.9.28',
+      [SDK]: '1.31.0',
+    },
   });
   assert.match(problems.join('\n'), /2 copies of circle-ir/);
 });
 
 test('rejects a lockfile that resolves another version', () => {
-  assert.match(check({ locked: { 'node_modules/circle-ir': '4.9.28' } }).join('\n'), /resolves circle-ir 4\.9\.28/);
+  assert.match(check({ locked: { 'node_modules/circle-ir': '4.9.28', [SDK]: '1.31.0' } }).join('\n'), /resolves circle-ir 4\.9\.28/);
 });
 
 test('does not count packages nested under circle-ir as copies of it', () => {
   assert.deepEqual(
-    check({ locked: { 'node_modules/circle-ir': '4.9.29', 'node_modules/circle-ir/node_modules/web-tree-sitter': '0.26.7' } }),
+    check({
+      locked: {
+        'node_modules/circle-ir': '4.9.29',
+        'node_modules/circle-ir/node_modules/web-tree-sitter': '0.26.7',
+        [SDK]: '1.31.0',
+      },
+    }),
     [],
   );
+});
+
+test('rejects a second copy of the MCP SDK', () => {
+  const problems = check({
+    locked: {
+      'node_modules/circle-ir': '4.9.29',
+      [SDK]: '1.31.0',
+      'node_modules/some-module/node_modules/@modelcontextprotocol/sdk': '1.29.0',
+    },
+  });
+  assert.match(problems.join('\n'), /2 copies of @modelcontextprotocol\/sdk/);
+});
+
+test('rejects a lockfile with no MCP SDK at all', () => {
+  assert.match(check({ locked: { 'node_modules/circle-ir': '4.9.29' } }).join('\n'), /0 copies of @modelcontextprotocol\/sdk/);
 });
 
 test('rejects a release with no changelog entry', () => {

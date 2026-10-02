@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult, errorResult } from './types.js';
+import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { loadSourceCatalog } from '../resources/catalogs.js';
 
 export const describeSourceInputShape = {
@@ -27,6 +27,7 @@ export const describeSourceConfig = {
     'a source of the given category. Use when the LLM needs to know "which framework APIs count as an ' +
     'HTTP body source?" or "what constitutes an env-var source?"',
   inputSchema: describeSourceInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeDescribeSourceHandler(_ctx: ToolContext) {

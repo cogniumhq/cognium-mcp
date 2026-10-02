@@ -34,7 +34,14 @@ function install(spec) {
   const dir = mkdtempSync(join(tmpdir(), 'verify-install-'));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'verify-install', private: true }));
   const target = existsSync(spec) ? resolve(spec) : spec;
-  execFileSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', target], { cwd: dir, stdio: 'inherit' });
+  // A real install even when an outer `npm publish --dry-run` started this.
+  const env = { ...process.env };
+  delete env.npm_config_dry_run;
+  execFileSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', target], {
+    cwd: dir,
+    stdio: 'inherit',
+    env,
+  });
   return dir;
 }
 

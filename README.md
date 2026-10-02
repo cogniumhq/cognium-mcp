@@ -52,6 +52,7 @@ that, and the other promises, as separate checks:
 | manifest | what the tarball contains, and that it carries only the MIT licence |
 | install | a packed build installs into an empty directory and serves the same tools as the last release |
 | pin check | `circle-ir` is pinned exactly, resolved once, and named in the changelog |
+| self-scan | a published release of the scanner finds nothing high or critical in the server's own source, beyond a short, checked list of known false positives |
 
 ## Development
 
