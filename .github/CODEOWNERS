@@ -1,0 +1,7 @@
+# Code owners for cognium-mcp.
+#
+# Owners are requested automatically on any PR touching a matching path.
+# Inert until the team has write access to this repository and branch
+# protection on `main` requires review from code owners.
+
+*                                   @cogniumhq/coreteam

@@ -1,0 +1,48 @@
+# Dependabot version updates.
+#
+# Security updates are enabled separately in repo settings and are not
+# configured here — this file covers routine version bumps only.
+version: 2
+updates:
+  # The npm workspace root. `directory: /` covers packages/* too, because
+  # npm workspaces resolve from the root lockfile.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # `circle-ir` is pinned exactly and moves only in a deliberate release:
+    # it decides which optional tool modules the server will load.
+    ignore:
+      - dependency-name: circle-ir
+    groups:
+      dev-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "vitest"
+          - "@vitest/*"
+        update-types: [minor, patch]
+      # eslint and @eslint/js are released in lockstep and peer-depend on each
+      # other, so a PR bumping one alone cannot install. Grouped across all
+      # update types so they always move together.
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+
+  # Pinned action tags go stale silently and are a supply-chain surface in
+  # their own right.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]

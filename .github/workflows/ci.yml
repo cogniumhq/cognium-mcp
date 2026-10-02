@@ -1,0 +1,223 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only: this workflow builds and tests, it never writes to the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Jobs are split rather than sequenced inside one block so each surfaces as its
+# own check: they run in parallel, a lint failure cannot mask a test failure,
+# and any one of them can be made required in the ruleset independently.
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Repo tooling under scripts/ is not part of the package, so the package
+      # suite does not cover it. Node's built-in runner keeps this
+      # dependency-free.
+      - name: test — repo scripts
+        run: npm run test:scripts
+
+  build:
+    name: build + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+
+  test:
+    name: test + coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Two suites drive the built binary, so the build comes first.
+      - run: npm run build
+      # `test:coverage`, not `test`: the thresholds only gate with --coverage.
+      - name: test + coverage thresholds
+        run: npm run test:coverage
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-mcp-server
+          path: packages/mcp-server/coverage/
+          retention-days: 14
+          if-no-files-found: warn
+
+  # The promises this package makes to the outside, each as its own check so
+  # it can be required for a release independently. They also run inside the
+  # full suite above; here a red one says which promise broke.
+  gates:
+    name: gate — ${{ matrix.gate.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          # The same bytes over stdio and over streamable HTTP.
+          - { name: one answer, file: tests/one-answer.test.ts }
+          # floor · extended without and with an endpoint · commercial.
+          - { name: three states, file: tests/three-state.test.ts }
+          # A module on another circle-ir minor is refused; the floor serves.
+          - { name: module refusal, file: tests/modules.test.ts }
+          # Handshake, schema validity, no side effects on import.
+          - { name: protocol, file: tests/stdio-smoke.test.ts }
+          # What is in the tarball, and what must not be.
+          - { name: manifest, file: tests/pack-manifest.test.ts }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run ${{ matrix.gate.file }}
+        working-directory: packages/mcp-server
+
+  pins:
+    name: pin check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # Reads the manifest, the lockfile and the changelog; needs no install.
+      - run: npm run check:pins
+
+  install:
+    name: install + same tools as the last release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Pack what would be published, install it into an empty directory the
+      # way a user does, and compare its tools/list with the release on npm.
+      # A removed or renamed tool, or a changed schema, fails here: the tool
+      # list is the API, and breaking it takes a major version on purpose.
+      - name: Pack, install and compare tools/list
+        run: |
+          set -euo pipefail
+          npm pack --workspace packages/mcp-server --pack-destination "$RUNNER_TEMP" >/dev/null
+          tarball="$(ls "$RUNNER_TEMP"/cognium-mcp-server-*.tgz)"
+          node scripts/verify-install.mjs "$tarball" --same-tools-as @cognium/mcp-server@latest
+
+  self-scan:
+    name: self-scan (SAST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Not gating yet. The scanner is deliberately a *published* release of the
+    # CLI, never the engine this build is testing, so the product is not
+    # marking its own homework. But every CLI release so far parses `.ts`
+    # with the JavaScript grammar (cogniumhq/cognium-dev#409) and so reports
+    # one false critical here: a `sql_injection` on a Map lookup in
+    # src/cache.ts. A CLI built from the fix scans this tree clean. Drop
+    # `continue-on-error` when SELF_SCAN_CLI moves to a release with the fix.
+    continue-on-error: true
+    env:
+      SELF_SCAN_CLI: cognium-dev@4.9.29
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Gate on high/critical
+        run: npx --yes "$SELF_SCAN_CLI" scan packages/mcp-server/src --severity high
+      - name: Full report (advisory)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: npx --yes "$SELF_SCAN_CLI" scan packages/mcp-server/src
+
+  dependency-audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Production dependencies only, failing on high/critical. Dev-only
+      # advisories never reach anyone installing the server.
+      - name: Production dependency audit (fail on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+  conformance:
+    name: MCP conformance (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A second opinion, not a gate. The suite is written against a reference
+    # server with prompts, sampling and elicitation, none of which this server
+    # has, so only the scenarios that apply to a tools-and-resources server
+    # are run. The protocol promises this package makes are gated above.
+    continue-on-error: true
+    env:
+      CONFORMANCE: '@modelcontextprotocol/conformance@0.1.16'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run the applicable scenarios over streamable HTTP
+        env:
+          COGNIUM_MCP_MODULES: none
+        run: |
+          set -euo pipefail
+          node scripts/http-host.mjs 3939 &
+          host=$!
+          trap 'kill "$host" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://127.0.0.1:3939/mcp && break
+            sleep 1
+          done
+          status=0
+          for scenario in server-initialize ping tools-list resources-list; do
+            npx --yes "$CONFORMANCE" server --url http://127.0.0.1:3939/mcp --scenario "$scenario" || status=1
+          done
+          exit "$status"

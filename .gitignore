@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+*.tsbuildinfo
+
+# Package files
+*.tgz
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code personal configs (per-user, not project)
+.claude/*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+*.log
+
+# Secrets and local scan output
+.env
+.env.*
+!.env.example
+*-scan.json

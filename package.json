@@ -1,0 +1,36 @@
+{
+  "name": "cognium-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Cognium MCP server and its editor plugins",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/mcp-server",
+    "typecheck": "npm run typecheck -w packages/mcp-server",
+    "test": "npm run test -w packages/mcp-server",
+    "test:coverage": "npm run test:coverage -w packages/mcp-server",
+    "clean": "npm run clean -w packages/mcp-server",
+    "lint": "eslint .",
+    "check:pins": "node scripts/check-pins.mjs",
+    "test:scripts": "node --test 'scripts/*.test.mjs'"
+  },
+  "author": {
+    "name": "Cognium Labs",
+    "url": "https://cognium.dev"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cogniumhq/cognium-mcp.git"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "typescript-eslint": "^8.18.0"
+  }
+}
