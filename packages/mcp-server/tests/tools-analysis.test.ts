@@ -254,7 +254,7 @@ describe('list_reachable_sinks', () => {
   }, 30_000);
 });
 
-describe('find_similar', () => {
+describe('find_similars', () => {
   it('reports an actionable error for an unknown finding id', async () => {
     const r = await makeFindSimilarHandler(ctx)({
       project_root: root,

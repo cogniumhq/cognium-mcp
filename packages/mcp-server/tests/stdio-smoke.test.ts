@@ -90,7 +90,7 @@ const FLOOR_TOOLS = [
   'describe_sink',
   'describe_source',
   'explain_finding',
-  'find_similar',
+  'find_similars',
   'list_entry_points',
   'list_reachable_sinks',
   'refresh',

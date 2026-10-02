@@ -90,7 +90,7 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   server.registerTool('describe_source', describeSourceConfig, makeDescribeSourceHandler(ctx) as never);
   server.registerTool('attack_surface_summary', attackSurfaceSummaryConfig, makeAttackSurfaceSummaryHandler(ctx) as never);
   server.registerTool('list_reachable_sinks', listReachableSinksConfig, makeListReachableSinksHandler(ctx) as never);
-  server.registerTool('find_similar', findSimilarConfig, makeFindSimilarHandler(ctx) as never);
+  server.registerTool('find_similars', findSimilarConfig, makeFindSimilarHandler(ctx) as never);
   server.registerTool('refresh', refreshConfig, makeRefreshHandler(ctx) as never);
 
   registerResources(server);

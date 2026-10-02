@@ -150,7 +150,7 @@ describe('provenance', () => {
     const findings = (JSON.parse(scan.content[0].text) as { findings?: Array<{ id: string }> }).findings ?? [];
     expect(findings.length).toBeGreaterThan(0);
 
-    for (const name of ['explain_finding', 'find_similar']) {
+    for (const name of ['explain_finding', 'find_similars']) {
       const result = (await client.callTool({
         name,
         arguments: { project_root: root, finding_id: findings[0].id },
