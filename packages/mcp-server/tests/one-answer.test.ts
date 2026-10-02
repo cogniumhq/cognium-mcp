@@ -8,7 +8,7 @@
  * parsed JSON, so a difference in field order or number formatting fails too.
  *
  * Both doors load the same optional module by specifier, so the comparison
- * covers the loader as well as the eleven built-in tools.
+ * covers the loader as well as the thirteen built-in tools.
  *
  * What is and is not compared, stated here rather than quietly left out:
  *
@@ -40,6 +40,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const BIN = resolve(pkgRoot, 'dist/bin.js');
 const projectRoot = resolve(here, 'fixtures/one-answer/project');
+/** A Java project, because the navigation queries resolve Java today. */
+const javaRoot = resolve(here, 'fixtures/navigation/project');
 const moduleSpecifier = pathToFileURL(resolve(here, 'fixtures/one-answer/module.mjs')).href;
 
 /** Settings both doors share. A config dir that does not exist keeps a
@@ -255,10 +257,10 @@ describe('one answer: stdio and streamable HTTP', () => {
     },
   );
 
-  it('lists the eleven built-in tools and the module\'s one, on both doors', () => {
+  it('lists the thirteen built-in tools and the module\'s one, on both doors', () => {
     const list = JSON.parse(stdio.get(2)!) as { result: { tools: Array<{ name: string }> } };
     const names = list.result.tools.map((t) => t.name);
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(14);
     expect(names).toContain('scan');
     expect(names).toContain('fixture_echo');
     // No endpoint is configured, so the endpoint-backed tool is not listed.
@@ -340,7 +342,7 @@ describe('one answer: the 2026-07-28 revision', () => {
   it('lists the same tools as the older era does', () => {
     const names = (message: string): string[] =>
       (JSON.parse(message) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
-    expect(names(stdio.get(2)!)).toHaveLength(12);
+    expect(names(stdio.get(2)!)).toHaveLength(14);
   });
 
   it('refuses a revision it does not speak with the same error on both doors', async () => {
@@ -375,17 +377,25 @@ describe('one answer: the 2026-07-28 revision', () => {
     // What keeps existing clients working: a plain request is 2025-era
     // traffic and is served, statelessly, by the same handler.
     const legacy = await overHttp({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    expect((JSON.parse(legacy) as { result?: { tools: unknown[] } }).result?.tools).toHaveLength(12);
+    expect((JSON.parse(legacy) as { result?: { tools: unknown[] } }).result?.tools).toHaveLength(14);
   });
 });
 
 describe('one answer: tools that report elapsed time', () => {
-  // `analysisMs` is elapsed time. It is the only field allowed to differ.
-  const withoutTiming = (message: string): string => message.replace(/(\\?"analysisMs\\?": ?)\d+/g, (_match, key: string) => `${key}0`);
+  // Wall-clock readings are the only fields allowed to differ. `analysisMs`
+  // is the scan tools'; the navigation tools report a `timing` block of three,
+  // which the evaluation pack masks for the same reason.
+  const ELAPSED = /(\\?"(?:analysisMs|parseMs|indexMs|queryMs)\\?": ?)\d+(?:\.\d+)?/g;
+  const withoutTiming = (message: string): string =>
+    message.replace(ELAPSED, (_match, key: string) => `${key}0`);
 
   it.each([
     ['scan', { path: projectRoot }],
     ['taint_paths', { project_root: projectRoot }],
+    ['find_callers', { project_root: javaRoot, symbol: 'app.Greeter.greet' }],
+    ['find_callers', { project_root: javaRoot, symbol: 'app.Config.url' }],
+    ['find_callees', { project_root: javaRoot, symbol: 'app.Caller.viaInterface' }],
+    ['find_callers', { project_root: javaRoot, site: { file: 'app/Caller.java', line: 7, method_name: 'greet' } }],
   ] as Array<[string, Record<string, unknown>]>)(
     '%s agrees on both doors once the wall-clock reading is set aside',
     async (name, args) => {
@@ -394,7 +404,9 @@ describe('one answer: tools that report elapsed time', () => {
       const http = await overHttp(request);
 
       expect(withoutTiming(http)).toBe(withoutTiming(stdio.get(2)!));
-      expect(http).toContain('analysisMs');
+      // The reading must be present, not merely equal once masked — a tool
+      // that dropped the field would otherwise pass this comparison.
+      expect(http).toMatch(/analysisMs|queryMs/);
     },
     120_000,
   );

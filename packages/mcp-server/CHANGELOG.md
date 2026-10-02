@@ -4,6 +4,59 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-02
+
+Tested against `circle-ir` **4.10.0** (range `4.10`) and MCP SDK v2
+(`@modelcontextprotocol/server` **^2.2.0**), with the optional module
+`circle-ir-ai` **4.19.0**. Two tools are added. No tool was removed or
+renamed, and what every existing tool accepts and returns is unchanged.
+
+**`circle-ir` moves to a new minor, so an optional module must move with it.**
+A module built against `4.9` is refused at load on `4.10` by design, which
+would leave states 1 and 2 with none of their tools. Release order therefore
+matters: `circle-ir` 4.10.0, then `circle-ir-ai` on 4.10, then this package.
+
+### Added
+- **`find_callers` and `find_callees`** — who calls a method, and what a
+  method calls, over `circle-ir`'s navigation index. Java today; the tools
+  report `unsupported-language` for a file in a language the index does not
+  resolve rather than guessing.
+
+  Every answer carries a **tier**: `exact` (the receiver's static type was
+  known and the target was unique in it), `polymorphic` (dispatch is open,
+  with every candidate body listed and the declaring member as the target),
+  or `inferred` (bound by the method name alone). `inferred` is a floor and is
+  never promoted; it is also never produced when a receiver's type *is* known
+  and lacks the method, which on a 405-file Java repository was 78 of 147
+  name-only "callers" of a single method.
+
+  Every call site that could not be resolved carries a **reason** from a
+  closed vocabulary — `external`, `dynamic`, `generated`, `parse-error`,
+  `unsupported-language`, `unknown` — so an unresolved count can be read
+  rather than guessed at. Every answer states its **denominator**: files
+  searched, languages, and the directories deliberately skipped. A list cut to
+  `limit` reports `truncated` with the real total.
+
+  Both tools accept either a `symbol` or a `site`. A site is
+  `{file, line, method_name}` and not a column, because a chained expression
+  reports several calls at one line and column — `b.of().step("a").done()` is
+  three calls at one position — so the method name is what completes the key.
+
+  Both are `readOnlyHint: true`, `openWorldHint: false`, and every successful
+  response says `provenance: deterministic`. No model is consulted.
+
+  When no answer is `exact`, the response carries a `nextStep` line saying
+  what to do instead — inspect the candidates, check a receiver, or reach for
+  a language server. It sits in the server's envelope, not inside the answer,
+  because it is advice rather than a fact about the code.
+
+### Changed
+- The server's own cache keeps a navigation index per project, separately
+  from the scan analyses. It asks the engine for more (the extra type
+  information that makes a Java `record` visible) and for less (no cross-file
+  taint phase, which navigation does not read), so a caller asking "who calls
+  this" does not pay for taint analysis it will not use.
+
 ## [0.4.0] - 2026-10-02
 
 Tested against `circle-ir` **4.9.29** (range `4.9`) and MCP SDK v2

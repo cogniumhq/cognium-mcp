@@ -81,7 +81,7 @@ describe('malformed parameters over a connected transport', () => {
   it('leaves tools/list with no params alone', async () => {
     const reply = await ask(201, 'tools/list');
     expect(reply.error).toBeUndefined();
-    expect(reply.result?.tools).toHaveLength(11);
+    expect(reply.result?.tools).toHaveLength(13);
   });
 
   it('leaves an unknown method to the SDK, which answers -32601', async () => {
