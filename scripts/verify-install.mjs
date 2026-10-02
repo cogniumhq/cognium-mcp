@@ -15,7 +15,12 @@
  *   - a tool that is gone or renamed fails;
  *   - a tool whose input or output schema changed fails;
  *   - a new tool is reported and passes (a minor);
- *   - a changed title or description passes (a patch).
+ *   - a changed title or description passes (a patch);
+ *   - a schema that says the same thing in another JSON Schema dialect —
+ *     only `$schema` and the order of keys differ — is reported and passes.
+ *     What a caller may send has not changed; the changelog still has to
+ *     say so, because a validator that only knows the old dialect will
+ *     refuse to compile the new one.
  *
  * Exits 1 on the first two, and whenever a spec does not install or serve.
  */
@@ -90,9 +95,31 @@ function serve(dir) {
   });
 }
 
-/** Compare a tool list against a baseline. Returns { breaking, additions }. */
+/** A value with its object keys sorted at every level, so key order never counts. */
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical(value[key])]),
+  );
+}
+
+/** The schema's content, apart from which dialect it says it is written in. */
+function withoutDialect(schema) {
+  if (schema === null || typeof schema !== 'object') return schema;
+  const { $schema: _dialect, ...rest } = schema;
+  return rest;
+}
+
+/**
+ * Compare a tool list against a baseline.
+ * Returns { breaking, additions, dialects }.
+ */
 export function compareTools(baseline, candidate) {
   const breaking = [];
+  const dialects = [];
   const byName = new Map(candidate.map((tool) => [tool.name, tool]));
   for (const before of baseline) {
     const after = byName.get(before.name);
@@ -101,14 +128,21 @@ export function compareTools(baseline, candidate) {
       continue;
     }
     for (const key of ['inputSchema', 'outputSchema']) {
-      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      const a = JSON.stringify(canonical(before[key]));
+      const b = JSON.stringify(canonical(after[key]));
+      if (a === b) continue;
+      const sameContent =
+        JSON.stringify(canonical(withoutDialect(before[key]))) === JSON.stringify(canonical(withoutDialect(after[key])));
+      if (sameContent) {
+        dialects.push(`tool "${before.name}" ${key}: ${before[key]?.$schema ?? 'none'} → ${after[key]?.$schema ?? 'none'}`);
+      } else {
         breaking.push(`tool "${before.name}" has a different ${key}`);
       }
     }
   }
   const known = new Set(baseline.map((tool) => tool.name));
   const additions = candidate.filter((tool) => !known.has(tool.name)).map((tool) => tool.name);
-  return { breaking, additions };
+  return { breaking, additions, dialects };
 }
 
 async function inspect(spec) {
@@ -139,8 +173,12 @@ async function main(argv) {
   if (!baselineSpec) return 0;
 
   const baseline = await inspect(baselineSpec);
-  const { breaking, additions } = compareTools(baseline.tools, candidate.tools);
+  const { breaking, additions, dialects } = compareTools(baseline.tools, candidate.tools);
   for (const name of additions) console.log(`new tool (a minor): ${name}`);
+  if (dialects.length > 0) {
+    console.log(`same schemas, another JSON Schema dialect (${dialects.length} of them) — say so in the changelog:`);
+    console.log(`  e.g. ${dialects[0]}`);
+  }
   if (breaking.length > 0) {
     for (const problem of breaking) console.error(`breaking (a major): ${problem}`);
     return 1;

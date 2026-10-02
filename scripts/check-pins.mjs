@@ -10,9 +10,10 @@
  *   2. the lockfile resolves exactly one copy of it, at that version;
  *   3. the changelog entry for the version being released names the
  *      `circle-ir` it was tested against;
- *   4. the lockfile resolves exactly one copy of the MCP SDK. A tool module
- *      registers its tools on the server's own SDK objects, so a second copy
- *      would mean two incompatible sets of protocol types in one process.
+ *   4. the lockfile resolves exactly one copy of the MCP SDK's server package.
+ *      A tool module registers its tools on the server's own SDK objects, so
+ *      a second copy would mean two incompatible sets of protocol types in
+ *      one process.
  *
  * Usage: node scripts/check-pins.mjs [repo-root]
  * Exits 1 and prints one line per problem.
@@ -53,7 +54,7 @@ export function checkPins(root) {
     problems.push(`the lockfile resolves circle-ir ${copies[0][1].version}, but the manifest pins ${pin}`);
   }
 
-  const sdk = '@modelcontextprotocol/sdk';
+  const sdk = '@modelcontextprotocol/server';
   const sdkCopies = Object.entries(lock.packages ?? {}).filter(
     ([path, entry]) => path.endsWith(`node_modules/${sdk}`) && !entry.link,
   );

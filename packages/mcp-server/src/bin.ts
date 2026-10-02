@@ -15,17 +15,23 @@
  * cost.
  */
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createServer } from './server.js';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { buildServer, discoverModules } from './server.js';
 import { startupLines } from './startup.js';
 
 async function main(): Promise<void> {
-  const { server, discovery } = await createServer();
+  // Modules and the licence state are resolved once, before anything is
+  // served; every server the entry below builds reuses them.
+  const discovery = await discoverModules();
   for (const line of startupLines(discovery)) {
     process.stderr.write(`${line}\n`);
   }
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // `serveStdio` owns the transport and decides, from the client's opening
+  // message, which protocol era the connection speaks. A client that opens
+  // with `initialize` is served exactly as before; one that speaks the
+  // 2026-07-28 revision is served that. Either way it gets one server,
+  // built here, for the life of the connection.
+  serveStdio(() => buildServer({ modules: discovery.modules, enablement: discovery.enablement }));
 }
 
 main().catch((err) => {

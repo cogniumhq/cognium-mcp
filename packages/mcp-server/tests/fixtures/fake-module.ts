@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { ToolModule } from '../../src/modules.js';
 import type { ToolContext } from '../../src/tools/types.js';
 
@@ -34,7 +34,7 @@ export function fakeModule(opts: FakeModuleOptions = {}): ToolModule {
 
       server.registerTool(
         DETERMINISTIC_TOOL,
-        { description: 'Always available once the module is loaded.', inputSchema: {} },
+        { description: 'Always available once the module is loaded.', inputSchema: z.object({}) },
         (() => ({ content: [{ type: 'text', text: 'ok' }] })) as never,
       );
 
@@ -46,7 +46,7 @@ export function fakeModule(opts: FakeModuleOptions = {}): ToolModule {
         ENDPOINT_BACKED_TOOL,
         {
           description: 'Needs a configured endpoint. Runs only when called by name.',
-          inputSchema: { target: z.string() },
+          inputSchema: z.object({ target: z.string() }),
         },
         (() => ({
           content: [{ type: 'text', text: 'ok' }],

@@ -14,7 +14,7 @@
  */
 
 import { createRequire } from 'node:module';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { ToolContext } from './tools/types.js';
 
 export interface ToolModule {

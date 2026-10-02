@@ -7,7 +7,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, createMcpHandler, type CreateMcpHandlerOptions, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { ProjectCache } from './cache.js';
 import type { ToolContext } from './tools/types.js';
 import { registerResources } from './resources/index.js';
@@ -170,3 +170,24 @@ export async function createServer(
   });
   return { server, discovery: found };
 }
+
+/**
+ * The server as a web-standard HTTP handler: `handler.fetch(request)`
+ * returns the response. This is what an HTTP host mounts.
+ *
+ * It serves every request with a fresh server — floor plus whatever optional
+ * modules this install has — and it serves both protocol eras from the one
+ * endpoint: clients that open with `initialize`, statelessly, and clients
+ * that speak the 2026-07-28 revision. Module discovery and the licence state
+ * are resolved once per process, on the first request.
+ *
+ * A host that connects `createServer()`'s server to a transport of its own
+ * still works, and serves the 2025-era protocol only.
+ */
+export function createHandler(
+  opts: Omit<BuildServerOptions, 'modules' | 'enablement'> & { handler?: CreateMcpHandlerOptions } = {},
+): McpHttpHandler {
+  const { handler, ...build } = opts;
+  return createMcpHandler(async () => (await createServer(build)).server, handler);
+}
+

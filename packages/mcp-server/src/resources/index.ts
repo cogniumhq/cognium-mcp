@@ -9,7 +9,7 @@
  *   cognium://passes                → contents of circle-ir docs/PASSES.md
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { createRequire } from 'module';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';

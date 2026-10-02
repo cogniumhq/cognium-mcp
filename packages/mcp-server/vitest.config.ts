@@ -40,6 +40,9 @@ export default defineConfig({
       // Functions ratcheted; the others sit too close to a whole number to
       // move without flaking on a one-line change.
       //
+      // Re-measured on the v2 SDK with both protocol eras covered:
+      // 94.94 stmts / 86.07 branches / 98.58 funcs / 97.01 lines. Unchanged.
+      //
       // What remains is mostly describe-source.ts, attack-surface-summary's
       // roll-up branches and the list-entry-points framework branches.
       thresholds: {
