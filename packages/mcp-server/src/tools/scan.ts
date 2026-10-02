@@ -28,7 +28,7 @@ interface TaintFlowInfo {
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult, errorResult } from './types.js';
+import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import {
   truncateArray, truncateString, MAX_FINDINGS, MAX_TAINT_PATHS, MAX_STRING_LEN,
 } from '../util/serialize.js';
@@ -63,6 +63,7 @@ export const scanConfig = {
     'plus per-file taint flows and (for directory scans) cross-file taint paths. Results are cached per ' +
     'project + option-set and invalidated by file mtime, so subsequent tool calls are effectively free.',
   inputSchema: scanInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 function compactFinding(f: SastFinding): Record<string, unknown> {

@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult } from './types.js';
+import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { loadSanitizerCatalog } from '../resources/catalogs.js';
 
 export const checkSanitizerInputShape = {
@@ -28,6 +28,7 @@ export const checkSanitizerConfig = {
     'catalog. Returns { isValidSanitizer, matchedRule, notes, alternatives } so an LLM can ground its ' +
     '"this input is safe because it was escaped" reasoning.',
   inputSchema: checkSanitizerInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeCheckSanitizerHandler(_ctx: ToolContext) {

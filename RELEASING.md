@@ -17,6 +17,12 @@ publishes.
 4. **CI green on `main`**, including the `install` check, which compares the
    packed build's `tools/list` with the release on npm.
 
+`npm run release:check` runs all of it locally: lint, the script tests, build,
+typecheck, the suite with coverage thresholds, the pin check, and the packed
+build against the release on npm. `npm publish` runs it too, through
+`prepublishOnly`, and stops if any part fails. A removed or renamed tool, or a
+changed schema, passes only when the version being released is a new major.
+
 ## Publish
 
 ```bash
@@ -26,7 +32,9 @@ cd packages/mcp-server
 npm publish
 ```
 
-`prepublishOnly` builds and runs the tests again.
+`prepublishOnly` runs `release:check`, so a publish that would break a promise
+in the README does not go out. Use `npm publish --dry-run` to see the result
+without publishing.
 
 ## After
 

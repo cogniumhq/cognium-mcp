@@ -11,6 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ProjectCache } from './cache.js';
 import type { ToolContext } from './tools/types.js';
 import { registerResources } from './resources/index.js';
+import { guardParams } from './params-guard.js';
 import { floorEnablement, enablementForProcess, type Enablement } from './enablement.js';
 import {
   loadModules,
@@ -107,6 +108,16 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
       );
     }
   }
+
+  // Whatever transport a host connects — stdio here, streamable HTTP in a
+  // host of its own — a request with malformed parameters gets the reserved
+  // error code. The check has to sit in front of the SDK's handler, and the
+  // SDK only installs that at connect time, so it is added there.
+  const connect = server.connect.bind(server);
+  server.connect = async (transport) => {
+    await connect(transport);
+    guardParams(transport);
+  };
 
   return server;
 }

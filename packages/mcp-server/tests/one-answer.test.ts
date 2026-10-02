@@ -97,6 +97,8 @@ const REQUESTS: Request[] = [
   tool(12, 'describe_sink', {}),
   tool(13, 'explain_finding', { project_root: projectRoot, finding_id: 'no-such-finding' }),
   { jsonrpc: '2.0', id: 14, method: 'no/such/method' },
+  // Malformed at the protocol level, not the tool's: the reserved -32602.
+  { jsonrpc: '2.0', id: 15, method: 'tools/call', params: { name: 123, arguments: {} } },
 ];
 
 /** Send the requests to the stdio binary; return each response line by id. */
@@ -235,13 +237,20 @@ describe('one answer: stdio and streamable HTTP', () => {
     expect(names).not.toContain('fixture_endpoint_backed');
   });
 
-  it('compared real answers, not thirteen copies of one error', () => {
+  it('compared real answers, not fourteen copies of one error', () => {
     const errors = REQUESTS.filter((r) => {
       const message = JSON.parse(stdio.get(r.id)!) as { error?: unknown; result?: { isError?: boolean } };
       return message.error !== undefined || message.result?.isError === true;
     }).map((r) => r.id);
-    // Only the four error-path requests may fail.
-    expect(errors).toEqual([11, 12, 13, 14]);
+    // Only the five error-path requests may fail.
+    expect(errors).toEqual([11, 12, 13, 14, 15]);
+  });
+
+  it('answers malformed parameters with -32602 on both doors', () => {
+    for (const door of [stdio, http]) {
+      const message = JSON.parse(door.get(15)!) as { error?: { code: number } };
+      expect(message.error?.code).toBe(-32602);
+    }
   });
 
   it('saw the project it was pointed at', () => {

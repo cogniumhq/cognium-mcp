@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { RULE_DEFINITIONS, type SinkType } from 'circle-ir';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult, errorResult } from './types.js';
+import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { loadSanitizerCatalog } from '../resources/catalogs.js';
 
 export const describeSinkInputShape = {
@@ -23,6 +23,7 @@ export const describeSinkConfig = {
     'recommended remediation, CVSS-like severity score, and the list of sanitizer functions that would ' +
     'neutralize the sink. Use when the LLM needs authoritative information about a vulnerability class.',
   inputSchema: describeSinkInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeDescribeSinkHandler(_ctx: ToolContext) {

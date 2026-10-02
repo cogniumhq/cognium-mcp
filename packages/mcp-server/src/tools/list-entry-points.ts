@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult } from './types.js';
+import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, MAX_ENTRY_POINTS } from '../util/serialize.js';
 
 export const listEntryPointsInputShape = {
@@ -23,6 +23,7 @@ export const listEntryPointsConfig = {
     'call-graph edges that framework registration establishes but the raw AST does not surface. Answers ' +
     '"what is the attack surface of this codebase?"',
   inputSchema: listEntryPointsInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeListEntryPointsHandler(ctx: ToolContext) {

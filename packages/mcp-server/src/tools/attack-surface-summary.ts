@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { resolve } from 'path';
 import { RULE_DEFINITIONS, type SinkType } from 'circle-ir';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult } from './types.js';
+import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 
 export const attackSurfaceSummaryInputShape = {
   project_root: z.string().describe('Absolute path to the project root.'),
@@ -24,6 +24,7 @@ export const attackSurfaceSummaryConfig = {
     'total sinks by category, cross-file taint-path totals per sink type, and the top 10 files by finding ' +
     'count. Use as the entry-level tool for "what does this codebase look like from a security angle?"',
   inputSchema: attackSurfaceSummaryInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeAttackSurfaceSummaryHandler(ctx: ToolContext) {

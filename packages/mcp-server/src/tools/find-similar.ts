@@ -11,7 +11,7 @@
 import { z } from 'zod';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult, errorResult } from './types.js';
+import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, truncateString, MAX_FINDINGS } from '../util/serialize.js';
 
 export const findSimilarInputShape = {
@@ -31,6 +31,7 @@ export const findSimilarConfig = {
     'and/or taint sink type. Use after triaging a finding to catch the same vulnerability pattern ' +
     'elsewhere without re-scanning or re-prompting.',
   inputSchema: findSimilarInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeFindSimilarHandler(ctx: ToolContext) {

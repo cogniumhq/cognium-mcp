@@ -162,6 +162,20 @@ written. No key is baked in yet, so tokens currently report `no-key`.
 No telemetry, no phone-home, and no feature is locked behind a token: the state
 decides what is *listed*, and the terms carry the grant.
 
+## What a response and a tool tell you
+
+- **`provenance`** is the last field of every successful response:
+  `"deterministic"` for all eleven built-in tools. A tool from an optional module
+  that used a model says `llm: <model>`.
+- **Annotations** are declared on every tool in `tools/list`. Ten are
+  `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
+  deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
+  writes no file, but it clears the server's in-memory cache.
+- **Errors.** A malformed request gets a JSON-RPC error: `-32602` for bad
+  parameters, `-32601` for an unknown method. A well-formed call a tool cannot
+  serve — an unknown sink type, a missing path — is a normal result with
+  `isError: true` and a message that says what to do.
+
 ## Development
 
 ```bash

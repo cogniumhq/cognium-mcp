@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
-import { textResult } from './types.js';
+import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, truncateString, MAX_TAINT_PATHS } from '../util/serialize.js';
 
 export const taintPathsInputShape = {
@@ -25,6 +25,7 @@ export const taintPathsConfig = {
     'sink type. Use to enumerate every attacker-reachable data flow between files. Requires that `scan` ' +
     'has been called on the project root.',
   inputSchema: taintPathsInputShape,
+  annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
 export function makeTaintPathsHandler(ctx: ToolContext) {

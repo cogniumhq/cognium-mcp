@@ -14,7 +14,8 @@
     "clean": "npm run clean -w packages/mcp-server",
     "lint": "eslint .",
     "check:pins": "node scripts/check-pins.mjs",
-    "test:scripts": "node --test 'scripts/*.test.mjs'"
+    "test:scripts": "node --test 'scripts/*.test.mjs'",
+    "release:check": "npm run lint && npm run test:scripts && npm run build && npm run typecheck && npm run test:coverage && npm run check:pins && node scripts/release-check.mjs"
   },
   "author": {
     "name": "Cognium Labs",

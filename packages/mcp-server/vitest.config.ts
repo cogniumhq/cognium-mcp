@@ -35,12 +35,17 @@ export default defineConfig({
       // 94.60 stmts / 85.55 branches / 98.50 funcs / 96.73 lines. Branches
       // and functions ratcheted.
       //
+      // Re-measured the same day with the self-description and params-guard
+      // tests: 94.92 stmts / 86.04 branches / 98.56 funcs / 97.00 lines.
+      // Functions ratcheted; the others sit too close to a whole number to
+      // move without flaking on a one-line change.
+      //
       // What remains is mostly describe-source.ts, attack-surface-summary's
       // roll-up branches and the list-entry-points framework branches.
       thresholds: {
         statements: 94,
         branches: 85,
-        functions: 97,
+        functions: 98,
         lines: 96,
       },
     },
