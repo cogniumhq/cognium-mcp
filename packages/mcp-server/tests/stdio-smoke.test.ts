@@ -91,7 +91,7 @@ const FLOOR_TOOLS = [
   'describe_source',
   'explain_finding',
   'find_callees',
-  'find_callers',
+  'find_the_callers',
   'find_similar',
   'list_entry_points',
   'list_reachable_sinks',

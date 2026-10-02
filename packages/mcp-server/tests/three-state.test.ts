@@ -32,7 +32,7 @@ const FLOOR_TOOLS = [
   'attack_surface_summary',
   'list_reachable_sinks',
   'find_similar',
-  'find_callers',
+  'find_the_callers',
   'find_callees',
   'refresh',
 ];
