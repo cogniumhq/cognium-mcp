@@ -4,6 +4,61 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-02
+
+Tested against `circle-ir` **4.9.29** (range `4.9`) and MCP SDK v2
+(`@modelcontextprotocol/server` **^2.2.0**). No tool was added, removed or
+renamed, and what each tool accepts and returns is unchanged.
+
+### Added
+- **The server speaks MCP revision 2026-07-28**, next to the revisions it
+  already spoke. A client of the newer revision opens with `server/discover`
+  and puts its protocol version, identity and capabilities on every request;
+  results carry `resultType`, and the server's identity is in the result's
+  `_meta`. A client that opens with `initialize` is served exactly as before.
+  The era is chosen per connection over stdio and per request over HTTP, from
+  the same server.
+- **`createHandler()`** — the server as a web-standard HTTP handler:
+  `handler.fetch(request)` returns the response. It builds a fresh server per
+  request, serves both eras from one endpoint, and resolves the optional
+  modules and the licence state once per process. This is what an HTTP host
+  should mount.
+
+### Changed
+- **The MCP SDK moves from `@modelcontextprotocol/sdk` 1.x to the v2 packages**
+  (`@modelcontextprotocol/server`, `@modelcontextprotocol/core`). The 1.x line
+  has no release that speaks 2026-07-28.
+- **The stdio binary serves through the SDK's era-aware entry**, so one process
+  answers either kind of client. The bin name and its arguments are unchanged.
+
+#### Consumer Impact
+Each of these changes what a client sees without an error at the point of
+change, on the 2025-era protocol as well as the new one.
+
+- **Tool input schemas declare JSON Schema 2020-12, not draft-07.** The
+  `$schema` of every `inputSchema` in `tools/list` changes from
+  `http://json-schema.org/draft-07/schema#` to
+  `https://json-schema.org/draft/2020-12/schema`. The schemas are otherwise
+  identical, key for key: what a tool accepts has not changed. A client that
+  compiles `inputSchema` with a validator that only knows draft-07 will refuse
+  the new `$schema` and has to move to a 2020-12 validator or drop the keyword.
+- **A call to a tool that does not exist is a JSON-RPC error**, `-32602` with
+  `Tool <name> not found`. It was a normal result with `isError: true`. A client
+  that looked at `result.isError` to detect an unknown tool gets an error
+  response instead and has to handle it there.
+- **Error text loses its `MCP error -32602: ` prefix.** A tool called with
+  arguments that do not match its schema still returns a result with
+  `isError: true`; the message now starts `Input validation error: …`. Match on
+  the structure, not on the old prefix.
+- **`createServer()` connected to a transport of your own serves the 2025-era
+  protocol only.** That is what it did before, so nothing breaks; but a host
+  that wants to serve 2026-07-28 has to mount `createHandler()` instead.
+- **A tool module is registered on the v2 SDK's `McpServer`.** A module built
+  against the 1.x SDK still loads and its tools still work — `registerTool` is
+  called the same way — but its types no longer line up with this package's
+  `ToolModule`. `circle-ir-ai/mcp` needs a release built on the v2 SDK for a
+  host that type-checks the two together.
+
 ## [0.3.0] - 2026-10-02
 
 Tested against `circle-ir` **4.9.29** (range `4.9`), MCP SDK **^1.30.1** and the

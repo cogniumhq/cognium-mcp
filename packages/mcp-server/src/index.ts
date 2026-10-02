@@ -10,6 +10,7 @@
 export {
   buildServer,
   createServer,
+  createHandler,
   discoverModules,
   resetDiscoveryForTests,
   SERVER_NAME,

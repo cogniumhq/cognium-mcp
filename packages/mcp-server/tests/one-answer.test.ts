@@ -21,6 +21,10 @@
  *     gets a stdio session of its own — otherwise the comparison would turn
  *     on whether an earlier request in the session had finished.
  *   - `refresh` only reports cache state, so it is not compared.
+ *
+ * The set is run twice: as a 2025-era client asks it, opening with
+ * `initialize`, and as a client of the 2026-07-28 revision asks it, with an
+ * envelope on every request. Both doors serve both eras from one server.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -28,8 +32,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { createServer, resetDiscoveryForTests } from '../src/server.js';
+import { createHandler, resetDiscoveryForTests } from '../src/server.js';
 import { resetEnablementForTests, ENV_CONFIG_DIR, ENV_ENDPOINT, ENV_LICENSE, ENV_LICENSE_PUBKEY } from '../src/enablement.js';
 import { ENV_MODULES } from '../src/modules.js';
 
@@ -149,24 +152,48 @@ function overStdio(requests: Request[]): Promise<Map<number, string>> {
   });
 }
 
-/**
- * Send one request over streamable HTTP, the way a stateless host does it:
- * a server and a transport per request. Returns the JSON-RPC message as sent.
- */
-async function overHttp(request: Request): Promise<string> {
-  const { server } = await createServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  await server.connect(transport);
+/** The envelope a 2026-07-28 request carries in place of an `initialize` handshake. */
+const MODERN = '2026-07-28';
+const ENVELOPE = {
+  'io.modelcontextprotocol/protocolVersion': MODERN,
+  'io.modelcontextprotocol/clientInfo': { name: 'one-answer', version: '0' },
+  'io.modelcontextprotocol/clientCapabilities': {},
+};
 
-  const res = await transport.handleRequest(
-    new Request('http://one-answer.invalid/mcp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
-      body: JSON.stringify(request),
-    }),
+/** The same request, as a client speaking the 2026-07-28 revision sends it. */
+function modern(request: Request): Request {
+  return { ...request, params: { ...(request.params ?? {}), _meta: ENVELOPE } };
+}
+
+function isModern(request: Request): boolean {
+  return (request.params as { _meta?: unknown } | undefined)?._meta !== undefined;
+}
+
+/**
+ * Send one request over HTTP to the handler a host mounts. It serves a
+ * fresh server per request, in either era. Returns the JSON-RPC message as
+ * sent.
+ */
+let handler: ReturnType<typeof createHandler> | undefined;
+
+async function overHttp(request: Request): Promise<string> {
+  handler ??= createHandler();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+  };
+  // A 2026-07-28 request names its version and method in headers as well as
+  // in the body, and a tool call names the tool.
+  if (isModern(request)) {
+    headers['Mcp-Protocol-Version'] = MODERN;
+    headers['Mcp-Method'] = request.method;
+    const name = (request.params as { name?: unknown }).name;
+    if (request.method === 'tools/call' && typeof name === 'string') headers['Mcp-Name'] = name;
+  }
+  const res = await handler.fetch(
+    new Request('http://one-answer.invalid/mcp', { method: 'POST', headers, body: JSON.stringify(request) }),
   );
   const body = await res.text();
-  await server.close();
 
   if ((res.headers.get('content-type') ?? '').includes('text/event-stream')) {
     const data = body
@@ -193,7 +220,8 @@ beforeAll(() => {
   resetEnablementForTests();
 }, 120_000);
 
-afterAll(() => {
+afterAll(async () => {
+  await handler?.close();
   for (const [key, value] of Object.entries(saved)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -258,6 +286,96 @@ describe('one answer: stdio and streamable HTTP', () => {
     const body = JSON.parse(summary.result.content[0].text) as { totals: { files: number; sinks: number } };
     expect(body.totals.files).toBe(2);
     expect(body.totals.sinks).toBeGreaterThan(0);
+  });
+});
+
+describe('one answer: the 2026-07-28 revision', () => {
+  // The same questions, asked the way a client of the newer revision asks
+  // them: no handshake, an envelope on every request, a `server/discover`
+  // to open. The stdio binary and the HTTP handler both serve this era from
+  // the same server, so they have to agree here as well.
+  const DISCOVER: Request = modern({ jsonrpc: '2.0', id: 1, method: 'server/discover' });
+  const MODERN_REQUESTS: Request[] = [
+    DISCOVER,
+    modern({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+    modern(tool(3, 'describe_sink', { sink_type: 'sql_injection' })),
+    modern(tool(4, 'check_sanitizer', { function_qualified_name: 'escapeHtml', sink_type: 'xss' })),
+    modern(tool(6, 'list_entry_points', { project_root: projectRoot })),
+    modern(tool(7, 'attack_surface_summary', { project_root: projectRoot })),
+    modern(tool(10, 'fixture_echo', { text: 'same on every door' })),
+    modern(tool(11, 'no_such_tool', {})),
+    modern(tool(12, 'describe_sink', {})),
+    modern({ jsonrpc: '2.0', id: 14, method: 'no/such/method' }),
+    modern({ jsonrpc: '2.0', id: 15, method: 'tools/call', params: { name: 123, arguments: {} } }),
+  ];
+
+  let stdio: Map<number, string>;
+  const http = new Map<number, string>();
+
+  beforeAll(async () => {
+    stdio = await overStdio(MODERN_REQUESTS.filter((r) => !PROJECT_REQUESTS.has(r.id)));
+    for (const request of MODERN_REQUESTS.filter((r) => PROJECT_REQUESTS.has(r.id))) {
+      const session = await overStdio([DISCOVER, request]);
+      stdio.set(request.id, session.get(request.id)!);
+    }
+    for (const request of MODERN_REQUESTS) http.set(request.id, await overHttp(request));
+  }, 120_000);
+
+  it.each(MODERN_REQUESTS.map((r) => [r.id, r.method === 'tools/call' ? `tools/call ${String(r.params?.name)}` : r.method]))(
+    'request %i (%s) is byte-identical',
+    (id) => {
+      expect(http.get(id as number)).toBe(stdio.get(id as number));
+    },
+  );
+
+  it('is served as that revision, not as a fallback to the older one', () => {
+    const discover = JSON.parse(stdio.get(1)!) as { result: { supportedVersions: string[]; resultType: string } };
+    expect(discover.result.supportedVersions).toContain(MODERN);
+    const call = JSON.parse(stdio.get(3)!) as { result: { resultType?: string; content: Array<{ text: string }> } };
+    // The newer revision marks every result with what kind of result it is.
+    expect(call.result.resultType).toBe('complete');
+    expect(JSON.parse(call.result.content[0].text).provenance).toBe('deterministic');
+  });
+
+  it('lists the same tools as the older era does', () => {
+    const names = (message: string): string[] =>
+      (JSON.parse(message) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
+    expect(names(stdio.get(2)!)).toHaveLength(12);
+  });
+
+  it('refuses a revision it does not speak with the same error on both doors', async () => {
+    const unsupported: Request = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: { _meta: { ...ENVELOPE, 'io.modelcontextprotocol/protocolVersion': '2031-01-01' } },
+    };
+    const overStdioReply = (await overStdio([unsupported])).get(1)!;
+    handler ??= createHandler();
+    const res = await handler.fetch(
+      new Request('http://one-answer.invalid/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Protocol-Version': '2031-01-01',
+          'Mcp-Method': 'tools/list',
+        },
+        body: JSON.stringify(unsupported),
+      }),
+    );
+    // Compared as JSON, not as text: the SDK writes this one error with its
+    // keys in a different order on each transport.
+    const overHttpReply = JSON.parse(await res.text()) as { error: { code: number } };
+    expect(overHttpReply).toEqual(JSON.parse(overStdioReply));
+    expect(overHttpReply.error.code).toBe(-32022);
+  });
+
+  it('answers a request with no envelope as the older era, not as an error', async () => {
+    // What keeps existing clients working: a plain request is 2025-era
+    // traffic and is served, statelessly, by the same handler.
+    const legacy = await overHttp({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    expect((JSON.parse(legacy) as { result?: { tools: unknown[] } }).result?.tools).toHaveLength(12);
   });
 });
 

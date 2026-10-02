@@ -102,13 +102,26 @@ The package is side-effect free to import: nothing is built, read or connected
 until you ask for it. The stdio binary is a separate file, so mounting the
 server over your own transport does not spawn a subprocess.
 
+Over HTTP, mount the handler. It is web-standard — a `Request` in, a `Response`
+out — builds a fresh server per request, and serves both protocol eras:
+
+```ts
+import { createHandler } from '@cognium/mcp-server';
+
+const handler = createHandler();
+// Hono, Workers, Deno, Bun: hand it the request.
+app.all('/mcp', (c) => handler.fetch(c.req.raw));
+```
+
+To inspect what the install loaded, or to connect a transport of your own:
+
 ```ts
 import { createServer } from '@cognium/mcp-server';
 
 // Floor plus whatever optional modules this install has.
 const { server, discovery } = await createServer();
 console.error(discovery.enablement.state); // 'floor' | 'extended' | 'commercial'
-await server.connect(myTransport);
+await server.connect(myTransport); // serves the 2025-era protocol only
 ```
 
 `buildServer(options)` is the synchronous form: it registers exactly what you
@@ -172,9 +185,13 @@ decides what is *listed*, and the terms carry the grant.
   deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
   writes no file, but it clears the server's in-memory cache.
 - **Errors.** A malformed request gets a JSON-RPC error: `-32602` for bad
-  parameters, `-32601` for an unknown method. A well-formed call a tool cannot
-  serve — an unknown sink type, a missing path — is a normal result with
-  `isError: true` and a message that says what to do.
+  parameters or a tool that does not exist, `-32601` for an unknown method. A
+  well-formed call a tool cannot serve — an unknown sink type, a missing path —
+  is a normal result with `isError: true` and a message that says what to do.
+- **Protocol revisions.** The server speaks MCP 2026-07-28 and the 2025-era
+  revisions before it, from the same binary and the same HTTP handler. A client
+  that opens with `initialize` and one that opens with `server/discover` are
+  both served; nothing has to be configured.
 
 ## Development
 

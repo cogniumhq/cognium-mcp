@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { InMemoryTransport } from "@modelcontextprotocol/server";
+import type { JSONRPCMessage } from "@modelcontextprotocol/server";
 import { buildServer } from '../src/server.js';
 import { invalidParamsReply } from '../src/params-guard.js';
 

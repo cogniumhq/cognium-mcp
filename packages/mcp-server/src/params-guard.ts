@@ -16,16 +16,9 @@
  * is passed through, and the SDK answers it — `-32601` if it is unknown.
  */
 
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ReadResourceRequestSchema,
-  ErrorCode,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ListResourceTemplatesRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/core";
+import type { Transport, JSONRPCMessage } from "@modelcontextprotocol/server";
+import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 
 interface Issue {
   readonly path: ReadonlyArray<PropertyKey>;
@@ -70,7 +63,7 @@ export function invalidParamsReply(message: unknown): JSONRPCMessage | null {
   return {
     jsonrpc: '2.0',
     id,
-    error: { code: ErrorCode.InvalidParams, message: describe(method, parsed.error.issues) },
+    error: { code: ProtocolErrorCode.InvalidParams, message: describe(method, parsed.error.issues) },
   };
 }
 
