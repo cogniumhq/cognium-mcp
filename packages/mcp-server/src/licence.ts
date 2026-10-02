@@ -257,7 +257,7 @@ export function verifyLicence(token: string | undefined, opts: VerifyOptions = {
     };
   }
 
-  let signatureOk = false;
+  let signatureOk: boolean;
   try {
     // Over the canonical form of everything that arrived, not the segment's
     // own bytes and not just the fields this version reads.
