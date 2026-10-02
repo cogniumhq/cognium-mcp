@@ -22,7 +22,19 @@
  *     say so, because a validator that only knows the old dialect will
  *     refuse to compile the new one.
  *
- * Exits 1 on the first two, and whenever a spec does not install or serve.
+ * **Exit codes are distinct on purpose.** `release-check.mjs` grants a new
+ * major one exemption — a tool list that breaks deliberately — and it may
+ * grant it only for a tool list that actually broke. While every failure here
+ * exited 1, an install that could not resolve a dependency was reported as a
+ * broken tool list, and on a major release it was *excused* as one. A publish
+ * gate that passes because the thing it checks never ran is worse than no
+ * gate. So:
+ *
+ *   0  the candidate is fine (and matches the baseline, when one is given)
+ *   1  THE TOOL LIST BREAKS — the only failure a new major may excuse
+ *   2  usage
+ *   3  a spec did not install (pack or `npm install` failed, registry, ETARGET)
+ *   4  a spec installed but did not serve, or served no tools
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -34,6 +46,29 @@ import { pathToFileURL } from 'node:url';
 
 const BIN = 'mcp-server-cognium-dev';
 
+/** See the header: a caller branches on these, so they are part of the contract. */
+export const EXIT = { ok: 0, toolListBreaks: 1, usage: 2, didNotInstall: 3, didNotServe: 4 };
+
+/** A spec that could not be installed. Never a statement about its tools. */
+export class InstallError extends Error {
+  constructor(spec, cause) {
+    super(`${spec}: did not install — ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'InstallError';
+    this.spec = spec;
+    this.exitCode = EXIT.didNotInstall;
+  }
+}
+
+/** A spec that installed but would not answer. Also not a statement about its tools. */
+export class ServeError extends Error {
+  constructor(spec, cause) {
+    super(`${spec}: installed but did not serve — ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'ServeError';
+    this.spec = spec;
+    this.exitCode = EXIT.didNotServe;
+  }
+}
+
 /** Install `spec` into a fresh directory; return the directory. */
 function install(spec) {
   const dir = mkdtempSync(join(tmpdir(), 'verify-install-'));
@@ -42,11 +77,16 @@ function install(spec) {
   // A real install even when an outer `npm publish --dry-run` started this.
   const env = { ...process.env };
   delete env.npm_config_dry_run;
-  execFileSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', target], {
-    cwd: dir,
-    stdio: 'inherit',
-    env,
-  });
+  try {
+    execFileSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', target], {
+      cwd: dir,
+      stdio: 'inherit',
+      env,
+    });
+  } catch (err) {
+    rmSync(dir, { recursive: true, force: true });
+    throw new InstallError(spec, err);
+  }
   return dir;
 }
 
@@ -148,7 +188,13 @@ export function compareTools(baseline, candidate) {
 async function inspect(spec) {
   const dir = install(spec);
   try {
-    const served = await serve(dir);
+    let served;
+    try {
+      served = await serve(dir);
+    } catch (err) {
+      throw new ServeError(spec, err);
+    }
+    if (served.tools.length === 0) throw new ServeError(spec, new Error('serves no tools'));
     console.log(`${spec}: ${served.serverInfo.name}@${served.serverInfo.version} serves ${served.tools.length} tools`);
     return served;
   } finally {
@@ -162,15 +208,11 @@ async function main(argv) {
   const baselineSpec = flag === -1 ? undefined : argv[flag + 1];
   if (!spec || (flag !== -1 && !baselineSpec)) {
     console.error('usage: node scripts/verify-install.mjs <spec> [--same-tools-as <spec>]');
-    return 2;
+    return EXIT.usage;
   }
 
   const candidate = await inspect(spec);
-  if (candidate.tools.length === 0) {
-    console.error(`${spec}: serves no tools`);
-    return 1;
-  }
-  if (!baselineSpec) return 0;
+  if (!baselineSpec) return EXIT.ok;
 
   const baseline = await inspect(baselineSpec);
   const { breaking, additions, dialects } = compareTools(baseline.tools, candidate.tools);
@@ -181,11 +223,11 @@ async function main(argv) {
   }
   if (breaking.length > 0) {
     for (const problem of breaking) console.error(`breaking (a major): ${problem}`);
-    return 1;
+    return EXIT.toolListBreaks;
   }
   const identical = JSON.stringify(baseline.tools) === JSON.stringify(candidate.tools);
   console.log(identical ? 'tools/list is identical to the baseline' : 'tools/list is compatible with the baseline');
-  return 0;
+  return EXIT.ok;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
@@ -193,7 +235,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     (code) => process.exit(code),
     (err) => {
       console.error(err instanceof Error ? err.message : String(err));
-      process.exit(1);
+      // An install or serve failure keeps its own code, so a caller cannot
+      // mistake it for a statement about the tool list.
+      process.exit(err?.exitCode ?? EXIT.didNotServe);
     },
   );
 }
