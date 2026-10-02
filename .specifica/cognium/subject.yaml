@@ -1,0 +1,32 @@
+# Cognium evaluation — subject declaration.
+# How this repository asks to be evaluated: which specifications it adopts, how it is built and
+# started, and what it says about itself. Merging a change to this file is the owner's adoption
+# of what it lists.
+subject: github.com/cogniumhq/cognium-mcp
+package: "@cognium/mcp-server"          # packages/mcp-server
+role: product
+jurisdictions: []                        # no law is claimed; the specifications below gate only because the owner adopts them
+adopted:
+  - { instrument: mcp@2026-07-28, owner: "<principal, on merge>", date: "<merge date>" }
+  - { instrument: json-rpc@2.0, owner: "<principal, on merge>", date: "<merge date>" }
+claimed-scope:
+  targets: [T12]                         # Linux · Node 24
+  states: [floor, extended, commercial]
+  doors: [stdio, cli, http]
+build: { run: "npm ci && npm run build", serve: "." }
+# How each door is started on the built tree.
+doors:
+  stdio: { kind: stdio, command: node, args: [/subject/packages/mcp-server/dist/bin.js] }
+  cli: { kind: cli, status: "not available yet", command: null }
+  http: { kind: http, status: "not available yet", url: null }
+# What each licence state loads, on one install.
+states:
+  floor: { module: null }
+  extended: { module: "circle-ir-ai/mcp", version: null, status: "module not published yet" }
+  commercial: { module: "circle-ir-ai/mcp", version: null, status: "module not published yet" }
+# The tools this server lists in each state.
+declared-tools:
+  floor: [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer, describe_sink, describe_source, attack_surface_summary, list_reachable_sinks, find_similar, refresh]
+  extended: null
+  commercial: null
+packs: [tech/mcp@^1.0]
