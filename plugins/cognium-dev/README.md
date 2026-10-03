@@ -27,6 +27,7 @@ That URL 404s until the plugin is merged to `main`.
 | Rules | `prefer-cognium-sast`, `defensive-remediation` | Prefer engine tools over guessed vulns; verify sanitizers before patching (Cursor) |
 | Commands | `/cognium-scan`, `/cognium-attack-surface` | Scan the project; summarize entry points, reachable sinks, and taint paths |
 | Agent | `cognium-sast-reviewer` | Security review that calls MCP tools instead of free-styling advice |
+| Hook | `suggest-find-callers` | Claude Code only. After a Read or Grep whose output names a Java method, **suggests** `find_callers` for it, once per method per session |
 
 Suggested tool-call flow (same as the MCP README):
 
@@ -41,6 +42,37 @@ Languages: Java, JavaScript, TypeScript, Python, Go, Rust, Bash, HTML.
 This is a **defensive** SAST plugin. Skills, rules, agents, and commands help you scan, explain, triage, and remediate. They do not include exploit steps, payloads, or attack procedures.
 
 Cursor and Claude Code both start the **stdio** MCP server. OpenAI ChatGPT does not accept local stdio; see [openai/README.md](./openai/README.md).
+
+## The `find_callers` suggestion (Claude Code)
+
+After a `Read` or `Grep` whose output names a Java **method** declaration, the
+plugin adds one line of context suggesting you call `find_callers` for that
+method, with the symbol already filled in.
+
+**It only suggests.** The hook calls no tool, runs no analysis, reads no file,
+changes nothing and blocks nothing. It writes a single line of context and
+exits; whether to call the tool is the agent's decision, as is what to do with
+the answer.
+
+- **Once per method per session.** A second Read naming the same method says
+  nothing. A different method is suggested on its own.
+- **Only Java method declarations.** It stays silent on other languages, on a
+  constructor, on output with no method declaration in it, and on any tool
+  other than `Read` or `Grep`. A `Grep` run in its default
+  `files_with_matches` mode returns paths and no code, so there is no method
+  name to offer and the hook says nothing.
+- **Turn it off** with the plugin's **Suggest find_callers after reading Java**
+  option, which appears as a row in `/config`. Outside the plugin, set
+  `COGNIUM_SUGGEST_FIND_CALLERS=off`.
+
+**Why it exists.** A paired bench found the navigation tools reached for in
+**1 of 12** runs where they were available and the question was exactly theirs.
+Rewording the tool descriptions moved that **0 of 5** runs; this suggestion
+moved it **6 of 6**. The reading of why: the tools are listed in the session,
+but their descriptions are fetched on demand, so wording cannot influence a
+choice the agent has not looked up — naming the tool is what prompts it. The
+numbers are from a bench, on one repository and one prompt, with six runs a
+cell.
 
 ## Requirements
 
@@ -211,6 +243,7 @@ cognium-mcp/                            # git root
     ├── rules/                          # Cursor
     ├── commands/
     ├── agents/
+    ├── hooks/hooks.json                # Claude: PostToolUse suggestion hook
     ├── assets/logo.svg
     ├── openai/README.md                # OpenAI skills-only submit
     └── README.md

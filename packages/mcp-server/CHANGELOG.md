@@ -4,6 +4,37 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-03
+
+Tested against `circle-ir` **4.10.0**. **No tool was added, removed or renamed;
+no input or output schema changed; no answer changed.** A minor because the
+repository ships a new Claude Code plugin feature beside the server, not because
+the server's surface moved — the publish gate's `tools/list` comparison against
+the previous release passes unchanged.
+
+**Added — the `find_callers` suggestion, in the Claude Code plugin.** After a
+`Read` or `Grep` whose output names a Java method declaration, the plugin adds
+one line of context suggesting `find_callers` for that method, with the symbol
+filled in, **once per method per session**. It only suggests: it calls no tool,
+runs no analysis, reads no file, changes nothing and blocks nothing. It can be
+turned off from `/config` (**Suggest find_callers after reading Java**) or with
+`COGNIUM_SUGGEST_FIND_CALLERS=off`.
+
+**Why, measured.** A paired bench found the navigation tools reached for in **1
+of 12** runs where they were available and the question was exactly theirs.
+Rewording the tool descriptions (0.5.1) moved that **0 of 5** runs; this
+suggestion moved it **6 of 6** (Fisher exact two-tailed p = 0.0022). The reading
+of why: the tools are listed in the session but their descriptions are fetched on
+demand, so wording cannot influence a choice the agent never looks up — naming
+the tool is what prompts it. From a bench: one repository, one prompt, six runs a
+cell, and no accuracy claim is made in either direction.
+
+**Fixed, before it shipped.** The method pattern captured a **constructor** as a
+method name — `public AttackResult(` has a modifier and a name and no return
+type — so on a real file it offered to find the callers of the class. Requiring a
+return type keeps constructors out. Found end to end, against the file whose
+constructor is declared above its first method.
+
 ## [0.5.1] - 2026-10-03
 
 Tested against `circle-ir` **4.10.0**. **Tool descriptions only.** No tool was
