@@ -41,13 +41,38 @@ function filesIn(text) {
   return found;
 }
 
+/** A count the answer claims in prose, e.g. "246 call sites across 109 files". */
+function claimedFileCount(text) {
+  const m = /(\d+)\s+files?/i.exec(String(text));
+  return m ? Number(m[1]) : null;
+}
+
 function grade(run) {
   const site = byTarget.get(run.target);
   const expected = new Set(site.files);
   const named = filesIn(run.answer);
   const hit = [...expected].filter((f) => named.has(f));
   const offSample = [...named].filter((f) => !expected.has(f));
-  const verdict = !run.ok ? 'error' : hit.length === expected.size ? 'correct' : hit.length > 0 ? 'partial' : 'wrong';
+  const claimed = claimedFileCount(run.answer);
+
+  // `unscoreable`, not `wrong`.
+  //
+  // Both prompts are open questions and the answers come back as prose. An
+  // agent that replies "246 call sites across 109 files, all under
+  // src/main/java/org/owasp/webgoat/lessons/" has answered well and named no
+  // path this grader can match against a file set — and on this sample that
+  // is the COMMON case for a target with many callers. Calling it `wrong`
+  // would turn a limitation of the grading key into a finding about the
+  // subject, which is the one thing a bench must not do. Graded `wrong` only
+  // when the answer does enumerate paths and none of them is expected.
+  let verdict;
+  if (!run.ok) verdict = 'error';
+  else if (named.size === 0) verdict = 'unscoreable:no-path-named';
+  else if (hit.length === expected.size) verdict = 'correct';
+  else if (hit.length > 0) verdict = 'partial';
+  else if (claimed !== null && claimed > expected.size) verdict = 'unscoreable:summarised-a-larger-set';
+  else verdict = 'wrong';
+
   return {
     ...run,
     stratum: site.stratum,
@@ -55,6 +80,7 @@ function grade(run) {
     hitFiles: hit.length,
     offSampleFiles: offSample.length,
     namedAnyPath: named.size > 0,
+    claimedFileCount: claimed,
     verdict,
   };
 }
@@ -77,7 +103,8 @@ function meanCi(xs) {
   return { n, mean, sd, ci: [mean - half, mean + half] };
 }
 
-const score = (v) => (v === 'correct' ? 1 : v === 'partial' ? 0.5 : 0);
+/** Only a scoreable pair contributes a delta; the rest are counted, not scored. */
+const score = (v) => (v === 'correct' ? 1 : v === 'partial' ? 0.5 : v === 'wrong' ? 0 : null);
 
 /** Paired by (target, kind, harness, repeat): the same question, both arms. */
 const pairs = [];
@@ -86,9 +113,11 @@ const base = new Map(graded.filter((r) => r.config === 'baseline').map((r) => [k
 for (const w of graded.filter((r) => r.config === 'with-mcp')) {
   const b = base.get(key(w));
   if (!b) continue;
+  const scoreable = score(w.verdict) !== null && score(b.verdict) !== null;
   pairs.push({
+    scoreable,
     harness: w.harness, kind: w.kind, target: w.target, repeat: w.repeat, stratum: w.stratum,
-    dScore: score(w.verdict) - score(b.verdict),
+    dScore: scoreable ? score(w.verdict) - score(b.verdict) : null,
     dTokensIn: w.tokensIn - b.tokensIn,
     dTokensOut: w.tokensOut - b.tokensOut,
     dWallMs: w.wallMs - b.wallMs,
@@ -101,7 +130,8 @@ function summarise(rows, label) {
   return {
     label,
     pairs: rows.length,
-    dScore: meanCi(rows.map((r) => r.dScore)),
+    scoreablePairs: rows.filter((r) => r.scoreable).length,
+    dScore: meanCi(rows.filter((r) => r.scoreable).map((r) => r.dScore)),
     dTokensIn: meanCi(rows.map((r) => r.dTokensIn)),
     dTokensOut: meanCi(rows.map((r) => r.dTokensOut)),
     dWallSeconds: meanCi(rows.map((r) => r.dWallMs / 1000)),
@@ -123,7 +153,9 @@ console.log(JSON.stringify({
   byPrompt: kinds.map((k) => summarise(pairs.filter((p) => p.kind === k), k)),
   byHarnessAndPrompt: harnesses.flatMap((h) => kinds.map((k) =>
     summarise(pairs.filter((p) => p.harness === h && p.kind === k), `${h} · ${k}`))),
-  verdictCounts: Object.fromEntries(['correct', 'partial', 'wrong', 'error'].map((v) => [v, graded.filter((r) => r.verdict === v).length])),
+  verdictCounts: Object.fromEntries(
+    [...new Set(graded.map((r) => r.verdict))].sort().map((v) => [v, graded.filter((r) => r.verdict === v).length]),
+  ),
   pairs,
   runs: graded,
 }, null, 1));

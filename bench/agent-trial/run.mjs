@@ -75,10 +75,18 @@ function runClaude(prompt, withMcp) {
   const tools = [];
   for (const m of lines) for (const c of m.message?.content ?? []) if (c.type === 'tool_use') tools.push(c.name);
   const fin = lines.find((m) => m.type === 'result');
+  // Whether the server was AVAILABLE, recorded separately from whether it was
+  // USED. Without this a server that failed to start looks exactly like an
+  // agent that chose not to call the tool, and the difference between those
+  // two is the whole of the tool-selection finding.
+  const init = lines.find((m) => m.type === 'system' && m.subtype === 'init');
+  const servers = init?.mcp_servers ?? [];
   return {
     ok: r.status === 0 && !!fin,
     answer: String(fin?.result ?? ''),
     tools,
+    serverAvailable: servers.some((s) => s.status === 'connected'),
+    servers,
     usedFindCallers: tools.some((t) => /find_callers/.test(t)),
     tokensIn: (fin?.usage?.input_tokens ?? 0) + (fin?.usage?.cache_read_input_tokens ?? 0)
       + (fin?.usage?.cache_creation_input_tokens ?? 0),
