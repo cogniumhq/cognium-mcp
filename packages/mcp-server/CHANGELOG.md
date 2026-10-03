@@ -57,20 +57,20 @@ matters: `circle-ir` 4.10.0, then `circle-ir-ai` on 4.10, then this package.
   JDT compiler, with a pinned `ripgrep` answering the same queries as a
   baseline. Java only. Every figure below carries its denominator.
 
-  - **`exact` precision: 100 %** — of the 143 `exact` answers that landed on a
-    site the compiler had resolved, 143 named the compiler's callee and none
+  - **`exact` precision: 100 %** — of the 142 `exact` answers that landed on a
+    site the compiler had resolved, 142 named the compiler's callee and none
     contradicted it.
-  - **`inferred` precision: 26.7 %** of 15, where the baseline's name match was
-    right 60.6 % of 711. **An `inferred` answer is not evidence that a call
-    happens**; it is a name that matched with no receiver type to confirm it.
-    It is a lead to check, and the tool will not promote it.
-  - **Recall over sites whose target is declared in the repository: 79.6 %**
-    (148 of 186), against the baseline's 93.5 % (174 of 186).
-  - **Recall over all sampled sites: 34.0 %** (159 of 467), against the
-    baseline's 92.3 % (431 of 467) — and capped at **39.8 %** for any tool
-    answering from an index, because only 186 of the 467 sampled sites have a
-    target declared inside the repository. That row's two columns answer
-    different questions and should not be read as one comparison.
+  - **An `inferred` hit is not evidence of a call.** It is a name that matched
+    with no receiver type to confirm it, and the baseline is the measure of
+    what that is worth: a plain name match was right **60.6 %** of the time on
+    this sample. An `inferred` hit is a lead to check, and the tool will not
+    promote it.
+  - **Recall over sites whose target is declared in the repository: 79.6 %.**
+  - **Recall over all sampled sites: 34.1 %**, against the baseline's
+    **92.3 %** — and capped at **39.8 %** for any tool answering from an index,
+    because only 186 of the 467 sampled sites have a target declared inside the
+    repository. That row's two columns answer different questions and should
+    not be read as one comparison.
 
 ### Changed
 - The server's own cache keeps a navigation index per project, separately
