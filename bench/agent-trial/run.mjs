@@ -16,7 +16,7 @@
  * arms is whether `--mcp-config` / `mcp_servers` is passed.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 
 const args = Object.fromEntries(
@@ -33,6 +33,11 @@ const harnesses = (args.harness ?? 'claude,codex').split(',');
 const repeats = Number(args.repeats ?? 1);
 const limitSites = args.sites ? Number(args.sites) : undefined;
 const kinds = (args.prompts ?? 'callers,impact').split(',');
+// Which arms to run. The whole matrix is the default; a subset exists so a
+// cell can be added under a budget cap without re-running what is already
+// measured, and the subset is recorded in `meta` so a partial file never reads
+// as a complete one.
+const wantVariants = args.variants ? args.variants.split(',') : null;
 /** Stop before a run that would take the Claude meter past this. */
 const budgetUsd = args.budget ? Number(args.budget) : Infinity;
 
@@ -275,6 +280,51 @@ for (const stray of ['.claude', '.mcp.json', '.codex']) {
   }
 }
 
+/**
+ * The description each variant's server actually serves, read over stdio.
+ *
+ * Variant (b) IS a description change, so a stale `dist/` would serve 0.5.0's
+ * text under the name `described` and the cell would silently measure the
+ * variant it was meant to be compared against. After the first matrix there
+ * was no artefact left that could prove which text had been served — every
+ * `dist` file carried the mtime of a later rebuild — so the cell had to be run
+ * again. This reads it instead of trusting the build order.
+ */
+function servedDescription(serverPath) {
+  return new Promise((ok, fail) => {
+    const child = spawn('node', [serverPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    const timer = setTimeout(() => { child.kill('SIGKILL'); fail(new Error(`${serverPath} did not answer tools/list in time`)); }, 60_000);
+    child.stdout.on('data', (c) => {
+      out += c;
+      let msgs;
+      try { msgs = out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)); } catch { return; }
+      const list = msgs.find((m) => m.id === 2);
+      if (!list) return;
+      clearTimeout(timer);
+      child.kill();
+      const t = (list.result?.tools ?? []).find((x) => x.name === 'find_callers');
+      ok(t?.description ?? '');
+    });
+    child.on('error', (e) => { clearTimeout(timer); fail(e); });
+    const send = (m) => child.stdin.write(`${JSON.stringify(m)}\n`);
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'agent-trial', version: '0' } } });
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  });
+}
+
+/** The sentence variant (b) adds, and (a) must not have. */
+const DESCRIBED_MARKER = 'THE QUESTION THIS ANSWERS';
+const served = { worktree: await servedDescription(SERVER) };
+if (SERVER_PUBLISHED !== SERVER) served.published = await servedDescription(SERVER_PUBLISHED);
+if (!served.worktree.includes(DESCRIBED_MARKER)) {
+  throw new Error(`the worktree server does not serve variant (b)'s description — build packages/mcp-server before running, or the 'described' arm measures 'published'`);
+}
+if (served.published && served.published.includes(DESCRIBED_MARKER)) {
+  throw new Error("the published server already serves variant (b)'s description, so (a) and (b) are not distinct arms");
+}
+
 const sample = JSON.parse(readFileSync(args.sample, 'utf8'));
 const sites = limitSites ? sample.sample.slice(0, limitSites) : sample.sample;
 
@@ -285,6 +335,7 @@ for (let repeat = 1; repeat <= repeats; repeat++) {
     for (const kind of kinds) {
       for (const harness of harnesses) {
         for (const variant of Object.keys(VARIANTS)) {
+          if (wantVariants && !wantVariants.includes(variant)) continue;
           if (CLAUDE_ONLY.has(variant) && harness !== 'claude') continue;   // not applicable, not zero
           plan.push({ repeat, target: site.target, kind, harness, variant, config: variant });
         }
@@ -322,7 +373,12 @@ let spent = 0;
 let stoppedForBudget = null;
 const save = () => writeFileSync(args.out, JSON.stringify({
   meta: { ...sample.meta, versions, planned: plan.length, seed: SEED, budgetUsd, spentUsd: spent, stoppedForBudget,
-    servers: { worktree: SERVER, published: SERVER_PUBLISHED }, codexServer },
+    servers: { worktree: SERVER, published: SERVER_PUBLISHED }, codexServer,
+    // What this file actually covers, so a subset never reads as a full matrix.
+    ran: { harnesses, kinds, variants: wantVariants ?? Object.keys(VARIANTS), sites: sites.length, repeats },
+    // The served text each arm was actually given, so the variant is evidenced
+    // by the file rather than by the order the build happened to run in.
+    servedDescriptions: { worktree: served.worktree.slice(0, 160), published: served.published?.slice(0, 160) ?? '(same binary as worktree)' } },
   runs,
 }, null, 1));
 for (const item of plan) {
