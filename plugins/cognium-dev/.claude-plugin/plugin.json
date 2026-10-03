@@ -1,8 +1,8 @@
 {
   "name": "cognium-dev",
   "displayName": "Cognium SAST",
-  "version": "0.1.1",
-  "description": "Deterministic SAST via circle-ir MCP. Scan a project, explain taint findings, and propose sanitizer-backed defensive fixes. No API keys.",
+  "version": "0.2.0",
+  "description": "Deterministic SAST and call-graph navigation via circle-ir MCP. Scan a project, explain taint findings, propose sanitizer-backed defensive fixes, and answer who calls a method with a resolution tier on every answer. No API keys.",
   "author": {
     "name": "Cognium Labs",
     "email": "hello@cognium.net",
@@ -15,8 +15,18 @@
     "sast",
     "security",
     "taint-analysis",
+    "call-graph",
+    "find-callers",
     "mcp",
     "cognium"
   ],
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "suggest_find_callers": {
+      "type": "boolean",
+      "title": "Suggest find_callers after reading Java",
+      "description": "After a Read or Grep whose output names a Java method, suggest the find_callers tool once for that method. It only suggests — it never calls a tool or changes a file. Turn it off to stop the suggestions.",
+      "default": true
+    }
+  }
 }

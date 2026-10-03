@@ -99,6 +99,20 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 5. Before proposing a fix, `check_sanitizer` any proposed wrapper against the target sink type.
 6. Before changing a method, `find_callers` on it to see what depends on it.
 
+## The Claude Code plugin's `find_callers` suggestion
+
+This repository also ships a Claude Code plugin (`plugins/cognium-dev`). With it
+enabled, a `Read` or `Grep` whose output names a Java **method** declaration adds
+one line of context **suggesting** `find_callers` for that method, with the
+symbol filled in — once per method per session.
+
+**It only suggests.** It calls no tool, runs no analysis, reads no file and
+changes nothing; calling the tool stays the agent's decision. Turn it off with
+the plugin's **Suggest find_callers after reading Java** option in `/config`, or
+`COGNIUM_SUGGEST_FIND_CALLERS=off` outside the plugin. It is a plugin feature and
+changes nothing about the server: the tools, their schemas and their answers are
+the same with it and without it.
+
 ## Reading a navigation answer
 
 `find_callers` and `find_callees` report a **tier** on every answer and a

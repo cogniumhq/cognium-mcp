@@ -15,7 +15,7 @@
  * arms, and nothing here edits a tool description. The only difference between
  * arms is whether `--mcp-config` / `mcp_servers` is passed.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { spawnSync, spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 
@@ -51,10 +51,16 @@ const budgetUsd = args.budget ? Number(args.budget) : Infinity;
  *              schema change — the publish gate passes on it.
  *   hooked     `described` plus a Claude Code PostToolUse hook that suggests
  *              find_callers once after a Read or Grep over Java.
+ *   agentsmd   the PUBLISHED server plus an AGENTS.md in the repository naming
+ *              find_callers and when to use it. Codex's equivalent of the hook:
+ *              it has no hook mechanism, but it does read AGENTS.md. Paired
+ *              against `published`, which is the same server with no AGENTS.md,
+ *              so the file is the only thing that differs.
  *
- * `hooked` has no Codex equivalent: Codex has no hook mechanism here, so it is
- * NOT APPLICABLE for that harness rather than zero, and the runner skips it
- * instead of recording a miss.
+ * Each of the last two is applicable to exactly one harness, and the runner
+ * SKIPS the inapplicable cell rather than running it and recording a zero: a
+ * zero would read as "the lever did not work" where the lever was never
+ * delivered. `hooked` is Claude-only, `agentsmd` is Codex-only.
  */
 const SERVER_PUBLISHED = process.env.SERVER_PUBLISHED ?? SERVER;
 const VARIANTS = {
@@ -64,8 +70,25 @@ const VARIANTS = {
   published: { mcp: true, hook: false, server: SERVER_PUBLISHED },
   described: { mcp: true, hook: false, server: SERVER },
   hooked: { mcp: true, hook: true, server: SERVER },
+  agentsmd: { mcp: true, hook: false, server: SERVER_PUBLISHED, agentsMd: true },
 };
 const CLAUDE_ONLY = new Set(['hooked']);
+const CODEX_ONLY = new Set(['agentsmd']);
+
+/** Where the AGENTS.md lever is written, and what it says. */
+const AGENTS_MD = resolve(REPO, 'AGENTS.md');
+const AGENTS_MD_LINE = [
+  '# Repository guidance',
+  '',
+  '## Finding callers of a Java method',
+  '',
+  'This repository has a Cognium MCP server. To answer "who calls this method?" —',
+  'and before grepping for a method name — call the `find_callers` tool with the',
+  "method's symbol. It answers from a call graph and labels how sure it is of each",
+  'answer, where a text search finds the name rather than the calls. Use',
+  '`find_callees` for what a method calls.',
+  '',
+].join('\n');
 
 /**
  * The two prompts. Identical in every arm, and asked of every variant.
@@ -271,7 +294,7 @@ const RUNNERS = { claude: runClaude, codex: runCodex };
  * `published` arm came back reporting five hook firings. Checked rather than
  * remembered.
  */
-for (const stray of ['.claude', '.mcp.json', '.codex']) {
+for (const stray of ['.claude', '.mcp.json', '.codex', 'AGENTS.md']) {
   if (existsSync(resolve(REPO, stray))) {
     throw new Error(
       `the repository under test carries ${stray}, which would reach every arm and make the ` +
@@ -337,6 +360,7 @@ for (let repeat = 1; repeat <= repeats; repeat++) {
         for (const variant of Object.keys(VARIANTS)) {
           if (wantVariants && !wantVariants.includes(variant)) continue;
           if (CLAUDE_ONLY.has(variant) && harness !== 'claude') continue;   // not applicable, not zero
+          if (CODEX_ONLY.has(variant) && harness !== 'codex') continue;     // likewise
           plan.push({ repeat, target: site.target, kind, harness, variant, config: variant });
         }
       }
@@ -391,12 +415,32 @@ for (const item of plan) {
     process.stderr.write(`STOPPED FOR BUDGET at run ${n}/${plan.length}: $${spent.toFixed(2)} spent, cap $${budgetUsd}\n`);
     break;
   }
-  const { mcp, hook, server } = VARIANTS[item.variant];
+  const { mcp, hook, server, agentsMd } = VARIANTS[item.variant];
   process.stderr.write(`[${n}/${plan.length}] $${spent.toFixed(2)} ${item.harness} ${item.variant} ${item.kind} ${item.target.split('.').slice(-2).join('.')}\n`);
   const prompt = PROMPTS[item.kind](item.target);
-  const result = RUNNERS[item.harness](prompt, mcp, hook, server);
+
+  // The AGENTS.md lever belongs to exactly one arm. It is written immediately
+  // before that run and removed immediately after, and every other run asserts
+  // it is absent — because a file left behind would reach every later arm and
+  // make the variants indistinguishable, which is precisely how the Phase 7
+  // `.claude/settings.json` contamination happened. Asserted, not remembered.
+  if (agentsMd) writeFileSync(AGENTS_MD, AGENTS_MD_LINE);
+  else if (existsSync(AGENTS_MD)) {
+    throw new Error(`AGENTS.md is present for a ${item.variant} run, so the lever would leak into an arm that must not have it`);
+  }
+  // Read back from disk rather than trusting the write: this is the number the
+  // leak check in the report is made of.
+  const agentsMdPresent = existsSync(AGENTS_MD);
+  const agentsMdNamesTool = agentsMdPresent && /find_callers/.test(readFileSync(AGENTS_MD, 'utf8'));
+
+  let result;
+  try {
+    result = RUNNERS[item.harness](prompt, mcp, hook, server);
+  } finally {
+    if (agentsMd) rmSync(AGENTS_MD, { force: true });
+  }
   spent += result.costUsd ?? 0;
-  runs.push({ ...item, prompt, ...result });
+  runs.push({ ...item, prompt, agentsMdPresent, agentsMdNamesTool, ...result });
   save();
 }
 // Also after the loop, because the budget stop sets its reason and breaks: the

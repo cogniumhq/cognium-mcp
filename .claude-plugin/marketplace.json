@@ -5,12 +5,12 @@
     "email": "hello@cognium.net",
     "url": "https://cognium.dev"
   },
-  "description": "Official Claude Code plugins for Cognium SAST (cognium-dev / circle-ir).",
+  "description": "Official Claude Code plugins for Cognium (cognium-dev / circle-ir): deterministic SAST and call-graph navigation.",
   "plugins": [
     {
       "name": "cognium-dev",
       "source": "./plugins/cognium-dev",
-      "description": "Deterministic SAST: scan a project, triage taint paths, and propose sanitizer-backed fixes via @cognium/mcp-server."
+      "description": "Deterministic SAST and call-graph navigation: scan a project, triage taint paths, propose sanitizer-backed fixes, and answer who calls a method — via @cognium/mcp-server."
     }
   ]
 }
