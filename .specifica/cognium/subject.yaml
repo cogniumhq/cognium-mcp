@@ -22,11 +22,50 @@ doors:
 # What each licence state loads, on one install.
 states:
   floor: { module: null }
-  extended: { module: "circle-ir-ai/mcp", version: null, status: "module not published yet" }
-  commercial: { module: "circle-ir-ai/mcp", version: null, status: "module not published yet" }
-# The tools this server lists in each state.
+  extended: { module: "circle-ir-ai/mcp", version: "4.19.0" }
+  commercial: { module: "circle-ir-ai/mcp", version: "4.19.0", licence: "a signed token" }
+# The tools this server lists in each state. Measured from `tools/list` on the
+# published 0.5.0, with and without the module installed.
 declared-tools:
-  floor: [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer, describe_sink, describe_source, attack_surface_summary, list_reachable_sinks, find_similar, refresh]
-  extended: null
-  commercial: null
-packs: [tech/mcp@^1.0]
+  floor: [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer, describe_sink,
+          describe_source, attack_surface_summary, list_reachable_sinks, find_similar,
+          find_callers, find_callees, refresh]
+  extended: &with-module [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer,
+          describe_sink, describe_source, attack_surface_summary, list_reachable_sinks,
+          find_similar, find_callers, find_callees, refresh, verify_spec_conformance,
+          find_spec_drift, find_pattern, find_credential_exposure, check_license_compliance,
+          find_stale_dependencies, find_install_script_risk, find_typosquats,
+          find_excessive_permissions, layer_bom]
+  commercial: *with-module
+packs: [tech/mcp@^1.1, tech/call-resolution@^1.0]
+
+# Call resolution — the two navigation tools added in 0.5.0.
+#
+# What this claims, and what it deliberately does not. A subject must not claim
+# a language it cannot resolve: the navigation index resolves Java, and a file
+# in another language is reported `unsupported-language` and is not counted in
+# `scope.searched`, so the answer never implies a language was searched when it
+# was not. The evaluation dataset covers three languages; this subject answers
+# for one.
+call-resolution:
+  claimed-scope:
+    states: [floor]                  # no model path, so the optional module adds nothing here
+    languages: [java]
+    queries: [callers, callees]
+    tiers: [exact, polymorphic, inferred]
+  tools: [find_callers, find_callees]
+  tiers:
+    exact: >
+      the receiver's static type was known, the target was unique in it, and the target has a
+      body — so the target named is the code that runs
+    polymorphic: >
+      dispatch is open; `candidates` lists the bodies that could run, and an empty list means
+      none is declared in the searched tree
+    inferred: >
+      bound by the method name alone, with no receiver type to confirm it — a floor, never
+      promoted, and not evidence of a call
+  answer:
+    every-answer-states: [tier, scope.searched, scope.excluded]
+    unresolved-reasons: [external, dynamic, generated, parse-error, unsupported-language, unknown]
+    bounded: "200 answers, with a cut reported as `truncated: {returned, total}`"
+    provenance: deterministic        # no model is consulted on either tool
