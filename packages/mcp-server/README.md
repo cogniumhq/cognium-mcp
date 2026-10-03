@@ -142,10 +142,10 @@ same line so the comparison is visible rather than asserted.
 
 | | this server | ripgrep baseline |
 | --- | --- | --- |
-| `exact` precision | **100 %** of 143 answers that landed on a resolved site | — (it claims no `exact`) |
-| `inferred` precision | 26.7 % of 15 | 60.6 % of 711 |
-| recall, all sampled sites | 34.0 % (159 of 467) | 92.3 % (431 of 467) |
-| recall, targets declared in the repository | 79.6 % (148 of 186) | 93.5 % (174 of 186) |
+| `exact` precision | **100 %** — 142 of 142 answers that landed on a resolved site | — (it claims no `exact`) |
+| recall, all sampled sites | 34.1 % | 92.3 % |
+| recall, targets declared in the repository | 79.6 % | — |
+| precision of a plain name match | — | 60.6 % |
 
 Two of those rows need reading together rather than separately. **Recall over
 all sampled sites is capped at 39.8 % for any tool that answers from an
@@ -156,14 +156,15 @@ that row are answering different questions. The row below it — targets
 declared in the repository — is the one where both columns answer the same
 question.
 
-**An `inferred` answer is not evidence that a call happens.** It is a method
-name that matched with no receiver type to confirm it, and on this sample it
-was right 26.7 % of the time. Treat it as a lead to check by opening the site,
+**An `inferred` hit is not evidence of a call.** It is a method name that
+matched, with no receiver type to confirm it — and the baseline row above is
+the measure of what a bare name match is worth: right 60.6 % of the time on
+this sample. Treat an `inferred` hit as a lead to check by opening the site,
 never as a caller. That is why it is a separate tier rather than a weaker
 `exact`: the label is the warning, and the tool will not promote it.
 
-What `exact` is worth is the other half of the same point: of the 143 `exact`
-answers that landed on a site the compiler had resolved, **143 named the
+What `exact` is worth is the other half of the same point: of the 142 `exact`
+answers that landed on a site the compiler had resolved, **142 named the
 compiler's callee and none contradicted it.**
 
 ## Using it as a library

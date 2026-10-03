@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,34 @@ import { EXIT } from './verify-install.mjs';
 
 const script = resolve(dirname(fileURLToPath(import.meta.url)), 'verify-install.mjs');
 const BIN = 'mcp-server-cognium-dev';
+
+/**
+ * The environment for a child `npm`, with npm's own config stripped out.
+ *
+ * `npm publish --dry-run` runs `prepublishOnly`, and npm hands its settings
+ * down to every npm it starts as `npm_config_*` variables. The one that
+ * matters here is `npm_config_dry_run`: it makes the `npm pack` below a dry
+ * run too, so no tarball is written, `readdirSync` finds nothing, and the
+ * test fails with `The "path" argument must be of type string` — a confusing
+ * error a long way from its cause.
+ *
+ * `verify-install.mjs` and `release-check.mjs` already delete that one
+ * variable for the same reason. This strips the whole family rather than the
+ * one known offender, because the next setting npm decides to inherit should
+ * not break a test that has nothing to do with it: these tests must behave
+ * identically whether they are run from the repository root, through
+ * `npm --prefix`, or inside a publish.
+ *
+ * Measured: with `npm_config_dry_run=true` alone, four of these tests fail;
+ * with `npm_config_prefix` alone they pass. The dry-run flag is the cause.
+ */
+function npmEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase().startsWith('npm_config_')) delete env[key];
+  }
+  return env;
+}
 
 /** Pack a stand-in server that lists `tools`; return the tarball path. */
 function pack(dir, { name, version, tools }) {
@@ -55,8 +83,21 @@ function pack(dir, { name, version, tools }) {
     { mode: 0o755 },
   );
   const out = mkdtempSync(join(dir, 'tgz-'));
-  spawnSync('npm', ['pack', '--pack-destination', out], { cwd: pkgDir, stdio: 'ignore' });
-  return join(out, readdirSync(out).find((f) => f.endsWith('.tgz')));
+  const packed = spawnSync('npm', ['pack', '--pack-destination', out], {
+    cwd: pkgDir,
+    stdio: 'ignore',
+    env: npmEnv(),
+  });
+  const tarball = readdirSync(out).find((f) => f.endsWith('.tgz'));
+  // Say what went wrong here rather than letting `join(out, undefined)` throw
+  // a path error three frames away from the cause.
+  if (!tarball) {
+    throw new Error(
+      `npm pack wrote no tarball for ${name} (exit ${packed.status}). If this is running inside ` +
+        'a publish, an npm_config_* setting has leaked into the child npm — see npmEnv().',
+    );
+  }
+  return join(out, tarball);
 }
 
 const TOOLS = [
@@ -65,7 +106,10 @@ const TOOLS = [
 ];
 
 function verify(candidate, baseline) {
-  const result = spawnSync('node', [script, candidate, '--same-tools-as', baseline], { encoding: 'utf8' });
+  const result = spawnSync('node', [script, candidate, '--same-tools-as', baseline], {
+    encoding: 'utf8',
+    env: npmEnv(),
+  });
   return { status: result.status, out: `${result.stdout}${result.stderr}` };
 }
 
@@ -135,6 +179,38 @@ test('a spec that cannot install is didNotInstall, not a tool-list break', { tim
     assert.equal(status, EXIT.didNotInstall, out);
     assert.match(out, /did not install/);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('packing works with npm_config_dry_run set, as it is inside a publish', { timeout: 120_000 }, () => {
+  /**
+   * The regression this guards, tested where it actually broke.
+   *
+   * `npm publish --dry-run` runs `prepublishOnly` and hands `npm_config_dry_run`
+   * to every child npm. Before `npmEnv()`, the `npm pack` in `pack()` became a
+   * dry run that wrote no tarball, so these four cases failed under a publish
+   * while passing from the repository root — a publish gate whose own tests only
+   * pass when run the other way is not a gate.
+   *
+   * Setting the variable here and calling `pack()` tests the unit that broke.
+   * An earlier version of this guard spawned the whole file as a child instead,
+   * and was worth abandoning twice over: node refuses to nest its test runner
+   * (`run() is being called recursively … skipping running files`), so the child
+   * ran nothing and still exited 0 — a guard that passed by asserting over an
+   * empty set, which is the third time this track has produced one.
+   */
+  const dir = mkdtempSync(join(tmpdir(), 'e2e-dryrun-'));
+  const before = process.env.npm_config_dry_run;
+  process.env.npm_config_dry_run = 'true';
+  try {
+    const tarball = pack(dir, { name: 'standin-dryrun', version: '1.0.0', tools: TOOLS });
+    assert.match(tarball, /\.tgz$/);
+    assert.ok(existsSync(tarball), `pack() produced no tarball with npm_config_dry_run set: ${tarball}`);
+    assert.ok(statSync(tarball).size > 0, 'the tarball is empty');
+  } finally {
+    if (before === undefined) delete process.env.npm_config_dry_run;
+    else process.env.npm_config_dry_run = before;
     rmSync(dir, { recursive: true, force: true });
   }
 });
