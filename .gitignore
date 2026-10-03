@@ -33,3 +33,4 @@ Thumbs.db
 
 # The trial's generated MCP config — a machine-local absolute path.
 bench/agent-trial/mcp-config.generated.json
+bench/agent-trial/*.generated.json

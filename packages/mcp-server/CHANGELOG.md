@@ -4,6 +4,22 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-10-03
+
+Tested against `circle-ir` **4.10.0**. **Tool descriptions only.** No tool was
+added, removed or renamed; no input or output schema changed; no behaviour
+changed. The two navigation tools now open with the question each answers and
+say to call them before grepping for callers, because a paired bench found the
+tools reached for on 1 of 12 runs where they were available and the question
+was exactly theirs.
+
+**What the wording is worth, measured:** on its own, not much. A second paired
+trial put this text against 0.5.0's on the same questions and found the tools
+reached for on 1 of 6 Claude Code runs against 0 of 6, and 0 of 6 Codex runs
+against 0 of 6 — no effect this bench can distinguish from none (n = 6 a cell).
+The change is kept because it costs nothing and describes the tools more
+accurately, not because it was shown to work.
+
 ## [0.5.0] - 2026-10-02
 
 Tested against `circle-ir` **4.10.0** (range `4.10`) and MCP SDK v2

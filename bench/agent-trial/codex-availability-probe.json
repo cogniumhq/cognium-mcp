@@ -1,0 +1,21 @@
+{
+ "measured": "2026-10-03",
+ "why": "Codex's stream carries no init event listing its MCP servers, so availability is not readable per run. Without this probe a Codex tool-selection rate of zero has two explanations — the agent declined the tool, or the tool was never there — and the bench cannot say which.",
+ "how": "codex exec --json --skip-git-repo-check with the same -c mcp_servers.cognium config the trial's MCP arms use, and a prompt that instructs the tool be called outright.",
+ "server": "packages/mcp-server/dist/bin.js (0.5.1, the worktree build)",
+ "codex": "codex-cli 0.157.0",
+ "mcpToolCalls": [
+  {
+   "server": "cognium",
+   "tool": "find_callers",
+   "status": "in_progress"
+  },
+  {
+   "server": "cognium",
+   "tool": "find_callers",
+   "status": "completed"
+  }
+ ],
+ "attached": true,
+ "conclusion": "The server attaches to Codex and find_callers completes. The trial's Codex selection rate of 0/6 on both MCP variants is therefore a choice not to call an available tool, not an absent tool."
+}
