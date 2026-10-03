@@ -106,21 +106,30 @@ function meanCi(xs) {
 /** Only a scoreable pair contributes a delta; the rest are counted, not scored. */
 const score = (v) => (v === 'correct' ? 1 : v === 'partial' ? 0.5 : v === 'wrong' ? 0 : null);
 
-/** Paired by (target, kind, harness, repeat): the same question, both arms. */
+/**
+ * Paired by (target, kind, harness, repeat): the same question, baseline and
+ * one MCP arm. Phase 7 has three MCP arms rather than one, so a pair carries
+ * the `variant` it belongs to and every summary is reported per variant. The
+ * Phase 6 shape read `config === 'with-mcp'`; against a four-arm run that
+ * matched nothing and silently produced zero pairs.
+ */
 const pairs = [];
 const key = (r) => `${r.harness}|${r.kind}|${r.target}|${r.repeat}`;
-const base = new Map(graded.filter((r) => r.config === 'baseline').map((r) => [key(r), r]));
-for (const w of graded.filter((r) => r.config === 'with-mcp')) {
+const variantOf = (r) => r.variant ?? r.config;
+const base = new Map(graded.filter((r) => variantOf(r) === 'baseline').map((r) => [key(r), r]));
+for (const w of graded.filter((r) => variantOf(r) !== 'baseline')) {
   const b = base.get(key(w));
   if (!b) continue;
   const scoreable = score(w.verdict) !== null && score(b.verdict) !== null;
   pairs.push({
     scoreable,
+    variant: variantOf(w),
     harness: w.harness, kind: w.kind, target: w.target, repeat: w.repeat, stratum: w.stratum,
     dScore: scoreable ? score(w.verdict) - score(b.verdict) : null,
     dTokensIn: w.tokensIn - b.tokensIn,
     dTokensOut: w.tokensOut - b.tokensOut,
     dWallMs: w.wallMs - b.wallMs,
+    dCostUsd: (w.costUsd ?? 0) - (b.costUsd ?? 0),
     baseline: { verdict: b.verdict, tokensIn: b.tokensIn, tokensOut: b.tokensOut, wallMs: b.wallMs },
     withMcp: { verdict: w.verdict, tokensIn: w.tokensIn, tokensOut: w.tokensOut, wallMs: w.wallMs, usedFindCallers: w.usedFindCallers },
   });
@@ -135,12 +144,39 @@ function summarise(rows, label) {
     dTokensIn: meanCi(rows.map((r) => r.dTokensIn)),
     dTokensOut: meanCi(rows.map((r) => r.dTokensOut)),
     dWallSeconds: meanCi(rows.map((r) => r.dWallMs / 1000)),
-    toolSelectionRate: rows.length ? rows.filter((r) => r.withMcp.usedFindCallers).length / rows.length : null,
+    dCostUsd: meanCi(rows.map((r) => r.dCostUsd)),
+    toolSelection: {
+      called: rows.filter((r) => r.withMcp.usedFindCallers).length,
+      n: rows.length,
+      rate: rows.length ? rows.filter((r) => r.withMcp.usedFindCallers).length / rows.length : null,
+    },
   };
 }
 
 const harnesses = [...new Set(pairs.map((p) => p.harness))];
 const kinds = [...new Set(pairs.map((p) => p.kind))];
+const variants = [...new Set(pairs.map((p) => p.variant))];
+
+/**
+ * The headline the phase asked for: tool-selection rate per variant per
+ * harness, computed over the MCP-arm RUNS and not over pairs, so a missing
+ * baseline could never quietly shrink a denominator. A harness that cannot
+ * carry a variant at all is reported as not applicable, which is a different
+ * fact from a rate of zero.
+ */
+const CANNOT_CARRY = { codex: ['hooked'] };
+const toolSelection = harnesses.flatMap((h) => variants.map((v) => {
+  if ((CANNOT_CARRY[h] ?? []).includes(v)) {
+    return { harness: h, variant: v, applicable: false, reason: 'the harness has no hook mechanism', called: null, n: 0, rate: null };
+  }
+  const rows = graded.filter((r) => r.harness === h && variantOf(r) === v);
+  return {
+    harness: h, variant: v, applicable: true,
+    called: rows.filter((r) => r.usedFindCallers).length,
+    n: rows.length,
+    rate: rows.length ? rows.filter((r) => r.usedFindCallers).length / rows.length : null,
+  };
+}));
 
 console.log(JSON.stringify({
   meta: {
@@ -148,7 +184,11 @@ console.log(JSON.stringify({
     grading: 'recall against the labelled callers; off-sample names are counted, never penalised',
     provenance: 'reasoned from a bench — a paired agent trial, not a graded pack run',
   },
+  toolSelection,
   overall: summarise(pairs, 'all pairs'),
+  byVariant: variants.map((v) => summarise(pairs.filter((p) => p.variant === v), v)),
+  byVariantAndHarness: variants.flatMap((v) => harnesses.map((h) =>
+    summarise(pairs.filter((p) => p.variant === v && p.harness === h), `${v} · ${h}`))),
   byHarness: harnesses.map((h) => summarise(pairs.filter((p) => p.harness === h), h)),
   byPrompt: kinds.map((k) => summarise(pairs.filter((p) => p.kind === k), k)),
   byHarnessAndPrompt: harnesses.flatMap((h) => kinds.map((k) =>

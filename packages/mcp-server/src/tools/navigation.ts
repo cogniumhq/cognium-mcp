@@ -91,6 +91,14 @@ export const findCalleesInputShape = commonShape;
 export const findCallersConfig = {
   title: 'Find the callers of a symbol',
   description:
+    // The first line answers "which question is this tool for?", because an
+    // agent choosing between grep and a call graph is choosing between two
+    // tools that both look applicable. Measured on a paired bench, the tool
+    // was reached for on 1 of 12 runs where it was available and the question
+    // was exactly this one; this text is the cheapest thing to change.
+    'THE QUESTION THIS ANSWERS: "who calls this method?" — call this FIRST for that question, ' +
+    'before grepping. A text search for a method name finds the name; this finds the calls, and ' +
+    'says which ones it is sure of.\n\n' +
     'Who calls this method, with a resolution tier on every answer and a reason on every site it ' +
     'could not resolve. Use it before changing or deleting a method, to see what depends on it, and ' +
     'to judge the blast radius of a rename.\n\n' +
@@ -114,6 +122,8 @@ export const findCallersConfig = {
 export const findCalleesConfig = {
   title: 'Find what a symbol calls',
   description:
+    'THE QUESTION THIS ANSWERS: "what does this method call?" — call this FIRST for that question, ' +
+    'before reading the body and following names by hand.\n\n' +
     'What this method calls, with a resolution tier on every answer and a reason on every call it ' +
     'could not resolve. Use it to understand a method before editing it, to trace what a change will ' +
     'touch, and to find the project-internal calls inside a body full of framework noise.\n\n' +
