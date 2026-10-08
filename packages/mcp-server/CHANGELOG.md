@@ -4,6 +4,36 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-10-08
+
+Tested against `circle-ir` **4.13.2**. The optional module to pair it with is
+`circle-ir-ai` **4.23.0**, built on `4.13.2`; a module built against `4.12`
+(such as `4.21.0`) is refused at load on `4.13` by design. **No tool was added,
+removed or renamed; no input or output schema changed.** Answers change for C#
+and, in one case, JavaScript/TypeScript:
+
+- **C# taint is scoped to the declaring method** (`circle-ir` 4.13, #548). A
+  source reaches a sink in another method only through a class field or a
+  return value; same-named variables in sibling methods no longer leak.
+- **More C# sanitizers and guards are credited** (`circle-ir` 4.13, #518, #520,
+  #579, #643): same-file helpers that only return sanitized values,
+  `HtmlEncoder.Default.Encode`, `SecurityElement.Escape`, LDAP escapes,
+  dominating allowlist checks, and fixed-host ssrf URLs. Credit is per method,
+  follows the last assignment, and covers only its own operand, so
+  `Encode(a) + b` still reports `b`.
+- **C# flows that were missed are found**: a plain reassignment `s = q;`
+  carries taint, a literal in one `switch` arm or `if` branch no longer erases
+  a sibling's taint (also multi-line `if`/`else` in Java and Go), and constant
+  `if` conditions are evaluated.
+- **A tainted argument must reach the callee's sink** (C#): passing a tainted
+  value to a method no longer reports every sink in it.
+- **A JS/TS `switch` whose arms assign only literals is constant**
+  (`circle-ir` 4.13.1), so `exec(cmd)` after such a `switch` is not reported.
+
+On the engine's Juliet C# 1.3 run, method-level TPR / FPR goes to 100% / 0%
+across variants; OWASP BenchmarkJava, SecuriBench Micro and Juliet Java are
+unchanged.
+
 ## [0.6.1] - 2026-10-08
 
 Tested against `circle-ir` **4.12.0**. The optional module to pair it with is
