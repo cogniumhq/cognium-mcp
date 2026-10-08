@@ -4,6 +4,29 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-10-08
+
+Tested against `circle-ir` **4.12.0**. The optional module to pair it with is
+`circle-ir-ai` **4.21.0**, the first release built on `4.12`; a module built
+against `4.10` is refused at load on `4.12` by design. **No tool was added,
+removed or renamed; no input or output schema changed.** Answers do change,
+because the engine's analysis changed:
+
+- **Flows whose only source is a bare function parameter are dropped**
+  (`circle-ir` 4.11, #292). Java and C# entry points, route-decorated handlers
+  and lines that also carry a real source are exempt. To keep them, pass
+  `disabledPasses: ["param-source-flow-gate"]` to `scan`.
+- **Java `response.getWriter()` writes report xss as a taint flow, not a
+  finding** (`circle-ir` 4.12, #585, #600). The pattern no longer flags writes
+  of constants or encoded values; where the value is tainted, `scan` lists the
+  xss under `flows` instead of `findings`.
+- **More Java taint is followed** (`circle-ir` 4.12): taint assigned in a
+  `switch` case, `PrintWriter.format`/`printf` at every argument,
+  `Properties.getProperty` as a source, and servlet handlers behind an
+  in-project base class treated as entry points.
+- **A Python `for` target bound from a tainted iterable emits a source**
+  (`circle-ir` 4.11, #493).
+
 ## [0.6.0] - 2026-10-03
 
 Tested against `circle-ir` **4.10.0**. **No tool was added, removed or renamed;
