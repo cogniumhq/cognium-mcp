@@ -22,8 +22,8 @@ doors:
 # What each licence state loads, on one install.
 states:
   floor: { module: null }
-  extended: { module: "circle-ir-ai/mcp", version: "4.19.0" }
-  commercial: { module: "circle-ir-ai/mcp", version: "4.19.0", licence: "a signed token" }
+  extended: { module: "circle-ir-ai/mcp", version: "4.21.0" }
+  commercial: { module: "circle-ir-ai/mcp", version: "4.21.0", licence: "a signed token" }
 # The tools this server lists in each state. Measured from `tools/list` on the
 # published 0.5.0, with and without the module installed.
 declared-tools:
