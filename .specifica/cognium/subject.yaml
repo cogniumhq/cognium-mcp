@@ -22,10 +22,10 @@ doors:
 # What each licence state loads, on one install.
 states:
   floor: { module: null }
-  extended: { module: "circle-ir-ai/mcp", version: "4.21.0" }
-  commercial: { module: "circle-ir-ai/mcp", version: "4.21.0", licence: "a signed token" }
+  extended: { module: "circle-ir-ai/mcp", version: "4.23.0" }
+  commercial: { module: "circle-ir-ai/mcp", version: "4.23.0", licence: "a signed token" }
 # The tools this server lists in each state. Measured from `tools/list` on the
-# published 0.5.0, with and without the module installed.
+# published 0.6.2, with and without the module installed.
 declared-tools:
   floor: [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer, describe_sink,
           describe_source, attack_surface_summary, list_reachable_sinks, find_similar,
