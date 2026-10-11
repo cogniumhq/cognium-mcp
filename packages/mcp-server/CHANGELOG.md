@@ -4,6 +4,34 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-10-11
+
+Tested against `circle-ir` **4.14.1**. The optional module to pair it with is
+`circle-ir-ai` **4.26.0**, built on `4.14.1`; a module built against `4.13`
+(such as `4.23.0`) is refused at load on `4.14` by design. **No tool was added,
+removed or renamed; no input or output schema changed.** Answers change in
+several languages:
+
+- **Flows that were missed are found.** Java `exec(cmd + tainted)` reports when
+  `cmd` is a local string constant (`circle-ir` 4.14.1, #627); a concatenation
+  of constants only stays clean. A destructured TypeScript function parameter
+  (`{ id }`, nested, or with a default) carries taint (4.14.1, #664).
+- **More sinks and sources are known** (`circle-ir` 4.14): Go `database/sql`
+  context, transaction and prepare calls are SQL sinks (#583); C#
+  `new BinaryFormatter().Deserialize(x)` and the other inline-created
+  formatters are CWE-502 sinks (#630); Java `JarEntry.getName()` is an
+  archive-entry source, as `ZipEntry.getName()` already was (#620); Java
+  `new CpsFlowExecution(script)` is reported as code injection, CWE-94 (#619).
+- **More hardcoded credentials are reported** (`circle-ir` 4.14): AWS temporary
+  STS keys (`ASIA…`, #648) and Stripe test-mode secret and restricted keys
+  (`sk_test_`, `rk_test_`, #576). Short and placeholder bodies stay quiet.
+- **A JS/TS response call with no arguments is not an xss sink**
+  (`circle-ir` 4.14, #629), so `res.status(400).end()` is not reported;
+  `res.end(x)` and `res.send(html)` still are.
+- **One over-long line no longer drops the rest of the file** (`circle-ir`
+  4.14, #593). A line over 10 000 characters is blanked and every other line is
+  analysed; a file that is a single minified line stays empty.
+
 ## [0.6.2] - 2026-10-08
 
 Tested against `circle-ir` **4.13.2**. The optional module to pair it with is
