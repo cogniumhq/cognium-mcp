@@ -4,6 +4,30 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-10-15
+
+Tested against `circle-ir` **4.15.0**. The optional module to pair it with is
+`circle-ir-ai` **4.28.0**, built on `4.15.0`; a module built against `4.14`
+(such as `4.26.0` or `4.27.0`) is refused at load on `4.15` by design. **No tool
+was added, removed or renamed; no input or output schema changed.** Answers
+change, mostly toward fewer false positives:
+
+- **New sources and sinks** (`circle-ir` 4.15): Express handlers that
+  destructure the request (`({ query }, res)`) and GraphQL resolver-map
+  arguments are sources; Spring `@RestController` / `@ResponseBody` handlers
+  that return request input in an HTML string are xss sinks; `loadClass` on a
+  context, class or system class loader is a code-injection sink.
+- **False positives cleared** (`circle-ir` 4.15): `fetch` to a `const` literal
+  origin is not ssrf; a `RegExp` built only from const string literals is not
+  redos; `JSON.stringify`, `qs.stringify`, C# dictionary lookups and one-way
+  hashes are not an `external_taint_escape`; a length, count or boolean test
+  of tainted text carries no taint; outbound `URLConnection` / `Socket` writes
+  are not xss.
+- **Sanitizer and guard credit follows the arguments** (`circle-ir` 4.15):
+  Java `replace` / `replaceAll` credit depends on what is stripped, and a
+  canonical-path `startsWith` guard counts only when the base ends with a
+  separator (the CVE-2022-23457 prefix bypass is reported).
+
 ## [0.6.3] - 2026-10-11
 
 Tested against `circle-ir` **4.14.1**. The optional module to pair it with is
