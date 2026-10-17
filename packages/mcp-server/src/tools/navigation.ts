@@ -107,10 +107,15 @@ export const findCallersConfig = {
     'implementation that could run, and all of them are reachable. `inferred` means bound by the ' +
     'method name alone with no receiver type to confirm it — treat it as a lead to check, never as a ' +
     'caller. An inferred hit is NOT evidence that the method is called from there.\n\n' +
+    'For an overloaded method, give the parameter list to ask about one overload: ' +
+    '`com.acme.Repo.find(Long,String)`, `()` for none, `String...` for varargs. Without one, answers ' +
+    'are grouped per overload, each carrying its `signature`. A `polymorphic` answer reached through a ' +
+    'supertype declaration or an override says so in `via`.\n\n' +
     '`unresolved` is the honest half of the answer: each entry is a site that calls something of this ' +
     'name which could not be bound, with a reason — `external` (the target is outside the searched ' +
     'tree, e.g. in the JDK or a framework), `dynamic` (reflection), `generated` (the member only ' +
-    'exists after annotation processing, e.g. a Lombok accessor), `parse-error`, ' +
+    'exists after annotation processing, e.g. a Lombok accessor), `overload-ambiguous` (the argument ' +
+    'types could not pick one overload; `candidates` lists them), `parse-error`, ' +
     '`unsupported-language`, or `unknown` (in the tree, and we failed to bind it). ' +
     'A large `external` count usually means the name is a common one, not that the answer is poor.\n\n' +
     '`scope` states what was searched and what was skipped, so a count can be read against its ' +

@@ -4,6 +4,60 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-17
+
+Tested against `circle-ir` **4.16.0**. **No tool was added, removed or renamed;
+no input schema changed.** A minor because `find_callers` and `find_callees`
+answers carry new fields, passed through from the engine.
+
+**`circle-ir` moves to a new minor, so an optional module must move with it.**
+A module built against `4.15` (such as `circle-ir-ai` `4.28.0`) is refused at
+load on `4.16` by design, which would leave the extended and commercial states
+with the built-in tools only. Release order: `circle-ir` 4.16.0, then
+`circle-ir-ai` on 4.16, then this package.
+
+### Added
+
+- **Callers per overload** (`circle-ir` 4.16): a `symbol` may carry a
+  parameter list — `com.acme.Repo.find(Long,String)`, `()` for none,
+  `String...` for varargs, `<init>(…)` for a constructor — and each call binds
+  to the overload the compiler would choose, only where the argument types make
+  that certain. Answers carry `signature`; a query without a parameter list on
+  an overloaded method gets its answers grouped per overload, with `overloads`
+  counts and a `note`. A call that cannot be bound to one overload is
+  `unresolved` with the new reason `overload-ambiguous` and its `candidates`. A
+  method with one declaration answers exactly as before.
+- **Callers through dispatch** (`circle-ir` 4.16): a call through a supertype or
+  interface declaration that the queried method overrides, and a call to an
+  override of it, are answered `polymorphic` with
+  `via: { member, relation: 'supertype' | 'override' }`; `super.m()` binds to
+  the superclass's member.
+- The `find_callers` description names the parameter-list form, `via` and
+  `overload-ambiguous`.
+
+### Changed
+
+Answers from the other tools move with the engine (`circle-ir` 4.16), across
+Java, C#, JS/TS, Python, Go and Rust. Among them:
+
+- **More reported**: Spring `ResponseEntity.ok().body(x)` xss; C#
+  `ProcessStartInfo` command injection through `FileName`, `Arguments` and
+  `ArgumentList.Add` behind a shell; C# taint across files in arrays,
+  container fields and fields set from parameters; flows through Java
+  arraycopy, 2-D arrays and `ArrayList`, wrapped multi-line statements, and
+  assignments inside JS/TS blocks and Python `if` arms; typed GraphQL resolver
+  maps and typed Express requests; AWS Lambda handlers. Same-file helpers that
+  only trim or case-fold are no longer credited as sanitizers (Java, JS/TS,
+  Python, Go), and several `log_injection` credits that strip only one of CR
+  and LF are dropped.
+- **False positives cleared**: C# taint killed by reassignment to a literal;
+  C# sinks whose every in-project caller passes a constant; C# cross-file
+  forwarders decided by the sink at the end of the chain; Java
+  `MessageFormat.format` / `String.format` as `external_taint_escape`; Java
+  `Random` parameters as weak-random; Go constant-pattern `MatchString` and
+  const-bounded sizes; Rust literal-equality guards, non-HTML `.body(x)` and
+  `serde_json::Value` deserialization; Python owner-only password files.
+
 ## [0.6.4] - 2026-10-15
 
 Tested against `circle-ir` **4.15.0**. The optional module to pair it with is
