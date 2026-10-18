@@ -22,10 +22,10 @@ doors:
 # What each licence state loads, on one install.
 states:
   floor: { module: null }
-  extended: { module: "circle-ir-ai/mcp", version: "4.28.0" }
-  commercial: { module: "circle-ir-ai/mcp", version: "4.28.0", licence: "a signed token" }
+  extended: { module: "circle-ir-ai/mcp", version: "4.29.0" }
+  commercial: { module: "circle-ir-ai/mcp", version: "4.29.0", licence: "a signed token" }
 # The tools this server lists in each state. Measured from `tools/list` on the
-# published 0.6.4, with and without the module installed.
+# published 0.7.0, with and without the module installed.
 declared-tools:
   floor: [scan, explain_finding, taint_paths, list_entry_points, check_sanitizer, describe_sink,
           describe_source, attack_surface_summary, list_reachable_sinks, find_similar,
@@ -66,6 +66,6 @@ call-resolution:
       promoted, and not evidence of a call
   answer:
     every-answer-states: [tier, scope.searched, scope.excluded]
-    unresolved-reasons: [external, dynamic, generated, parse-error, unsupported-language, unknown]
+    unresolved-reasons: [external, dynamic, generated, overload-ambiguous, parse-error, unsupported-language, unknown]
     bounded: "200 answers, with a cut reported as `truncated: {returned, total}`"
     provenance: deterministic        # no model is consulted on either tool
