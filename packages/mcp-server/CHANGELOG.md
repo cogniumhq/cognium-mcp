@@ -6,19 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-10-17
 
-Tested against `circle-ir` **4.16.0**. **No tool was added, removed or renamed;
-no input schema changed.** A minor because `find_callers` and `find_callees`
-answers carry new fields, passed through from the engine.
+Tested against `circle-ir` **4.16.1**. The optional module to pair it with is
+`circle-ir-ai` **4.29.0**, built on `4.16.1`. **No tool was added, removed or
+renamed; no input schema changed.** A minor because `find_callers` and
+`find_callees` answers carry new fields, passed through from the engine.
+
+**`circle-ir` 4.16.0 is skipped.** 4.16.1 fixes four of its regressions: Java
+analysis of large classes back to 4.15 speed (a class that took 638 s takes
+under a second), `java.lang.Character` predicates are not an
+`external_taint_escape`, a C# field written through a sanitizer in another
+method is credited, and a C# `Array.IndexOf` / `== -1` guard over a
+`static readonly` literal array is credited.
 
 **`circle-ir` moves to a new minor, so an optional module must move with it.**
 A module built against `4.15` (such as `circle-ir-ai` `4.28.0`) is refused at
 load on `4.16` by design, which would leave the extended and commercial states
-with the built-in tools only. Release order: `circle-ir` 4.16.0, then
-`circle-ir-ai` on 4.16, then this package.
+with the built-in tools only. Release order: `circle-ir` 4.16.1, then
+`circle-ir-ai` 4.29.0, then this package.
 
 ### Added
 
-- **Callers per overload** (`circle-ir` 4.16): a `symbol` may carry a
+- **Callers per overload** (`circle-ir` 4.16.1): a `symbol` may carry a
   parameter list — `com.acme.Repo.find(Long,String)`, `()` for none,
   `String...` for varargs, `<init>(…)` for a constructor — and each call binds
   to the overload the compiler would choose, only where the argument types make
@@ -27,7 +35,7 @@ with the built-in tools only. Release order: `circle-ir` 4.16.0, then
   counts and a `note`. A call that cannot be bound to one overload is
   `unresolved` with the new reason `overload-ambiguous` and its `candidates`. A
   method with one declaration answers exactly as before.
-- **Callers through dispatch** (`circle-ir` 4.16): a call through a supertype or
+- **Callers through dispatch** (`circle-ir` 4.16.1): a call through a supertype or
   interface declaration that the queried method overrides, and a call to an
   override of it, are answered `polymorphic` with
   `via: { member, relation: 'supertype' | 'override' }`; `super.m()` binds to
@@ -37,7 +45,7 @@ with the built-in tools only. Release order: `circle-ir` 4.16.0, then
 
 ### Changed
 
-Answers from the other tools move with the engine (`circle-ir` 4.16), across
+Answers from the other tools move with the engine (`circle-ir` 4.16.1), across
 Java, C#, JS/TS, Python, Go and Rust. Among them:
 
 - **More reported**: Spring `ResponseEntity.ok().body(x)` xss; C#
