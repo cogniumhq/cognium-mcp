@@ -4,6 +4,32 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-10-18
+
+Tested against `circle-ir` **4.17.0**. A module built against `4.16` (such as
+`circle-ir-ai` `4.29.0`) is refused at load on `4.17` by design, so this
+release waits for a `circle-ir-ai` built on `4.17`. **No tool was added,
+removed or renamed; no input or output schema changed.** Answers change:
+
+- **Signatures show a type variable as its erasure** (`circle-ir` 4.17):
+  `signature`, `overloads[].signature`, `unresolved[].candidates` and the
+  `note` from `find_callers` / `find_callees` read `getNumber(Map,Object)` where
+  4.16 read `getNumber(Map,K)`. Only parameters declared with a type variable
+  change. A signature saved from 0.7.0 for such a method matches no group; as a
+  query, either spelling is accepted.
+- **Overloads over type variables bind as the compiler binds them**
+  (`circle-ir` 4.17): `<T> put(T)` and `put(String)` no longer merge, a call
+  binds to the most specific fitting overload, override checks read the
+  supertype's parameters through the subtype's supertype clauses, and
+  `super.m()` is `exact` rather than `polymorphic`. A query on a method
+  inherited only from outside the tree answers with a `note`.
+- **More flows found** (`circle-ir` 4.17): C# static fields, `List.Add` and
+  `Hashtable` across files; JS/TS module-level stores across Express handlers;
+  Python `yaml.load` on a parameter reports `deserialization` again; Java
+  iterator taint survives rebinding, and same-named locals in sibling blocks
+  are tracked apart. A Rust allowlist ternary before an actix `.body()` is
+  credited.
+
 ## [0.7.0] - 2026-10-17
 
 Tested against `circle-ir` **4.16.1**. The optional module to pair it with is
