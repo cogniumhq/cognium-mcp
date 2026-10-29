@@ -78,7 +78,35 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
+| `analyze_dependencies` | Known advisories in a Java project's resolved dependencies (Maven, Gradle), matched against an OSV advisory snapshot you supply; with `baseline_root`, what a change removed and added. See below. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
+
+### `analyze_dependencies`
+
+Resolves each manifest directory to its dependency set from the best input
+present, and says which: a caller-named file (`resolved`), `gradle.lockfile`,
+the `dependency-tree.txt` / `dependency-list.txt` a build writes
+(`mvn dependency:tree -DoutputFile=dependency-tree.txt`), or else the build
+file itself (`kind: "declared"`, direct dependencies only). It then matches
+every coordinate against the advisory snapshot at `advisory_db` — a directory
+of OSV records, as `unzip Maven/all.zip` from OSV.dev leaves it; default
+`<project_root>/.cognium/advisory/osv-maven`.
+
+It never downloads a snapshot and never runs a build: the answer depends only
+on the tree, the snapshot and this version, and carries the snapshot's
+`digest` and `snapshotDate` (the newest record in it) so the caller can pin
+both. Each match gives the advisory id and aliases (CVE), the affected ranges,
+the later fixed versions, the record's own severity fields (copied, never
+ranked), the dependency's path from a direct dependency, and the version the
+POMs declare for it with where that comes from (`direct`, `property`,
+`dependencyManagement`, a parent's, a BOM, an external parent). Withdrawn
+records are listed by id and never matched. Test-only dependencies are left
+out unless `include_dev` is true.
+
+With `baseline_root` (the same project at an earlier commit), the answer adds
+`delta` — advisories `removed`, `added` and `persisting`, each with the
+versions seen on both sides, and the dependency drift — and the baseline's
+`resolution`, both under the one snapshot.
 
 ## Resources
 
@@ -263,9 +291,9 @@ decides what is *listed*, and the terms carry the grant.
 ## What a response and a tool tell you
 
 - **`provenance`** is the last field of every successful response:
-  `"deterministic"` for all eleven built-in tools. A tool from an optional module
+  `"deterministic"` for all fourteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
-- **Annotations** are declared on every tool in `tools/list`. Ten are
+- **Annotations** are declared on every tool in `tools/list`. Thirteen are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
   deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
   writes no file, but it clears the server's in-memory cache.

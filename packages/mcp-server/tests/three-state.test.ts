@@ -34,6 +34,7 @@ const FLOOR_TOOLS = [
   'find_similar',
   'find_callers',
   'find_callees',
+  'analyze_dependencies',
   'refresh',
 ];
 
@@ -61,7 +62,7 @@ function discoveryFor(env: NodeJS.ProcessEnv, installed: boolean): Discovery {
 }
 
 describe('three-state matrix', () => {
-  it('state 0 — floor: the 13 deterministic tools, nothing else', () => {
+  it('state 0 — floor: the 14 deterministic tools, nothing else', () => {
     const found = discoveryFor({ ...NO_CONFIG_DIR }, false);
     expect(found.enablement.state).toBe('floor');
     expect(found.enablement.installed).toBe(false);
@@ -176,7 +177,7 @@ describe('what the licence does not do', () => {
 });
 
 describe('the floor survives a bad module', () => {
-  it('keeps serving all 13 tools when a module throws while registering', () => {
+  it('keeps serving all 14 tools when a module throws while registering', () => {
     const found = discoveryFor({ ...NO_CONFIG_DIR }, true);
     const server = buildServer({
       modules: [fakeModule({ throwOnRegister: true })],
