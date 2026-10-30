@@ -80,8 +80,8 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.3.1",
-    "@types/node": "^26.6.2",
-    "@vitest/coverage-v8": "^5.0.2",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   }
