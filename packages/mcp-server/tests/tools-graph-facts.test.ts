@@ -73,3 +73,41 @@ describe('removal_reach', () => {
     expect(r.content[0].text).toMatch(/^Error: baseline_root does not exist/);
   });
 });
+
+describe('Java projects (buildJavaGraph)', () => {
+  const jbase = resolve(__dirname, 'fixtures', 'graph-facts-java', 'base');
+  const jhead = resolve(__dirname, 'fixtures', 'graph-facts-java', 'head');
+
+  it('find_dead_code answers a Java tree in the same shape', async () => {
+    const out = parse(await makeFindDeadCodeHandler()({ project_root: jbase }));
+    expect(out.scheme).toBe('dead-code@0.1');
+    expect(out.ids).toBe('ids@0.1');
+    const ts = parse(await makeFindDeadCodeHandler()({ project_root: base }));
+    expect(Object.keys(out)).toEqual(Object.keys(ts));
+    const find = (n: string) => (out.facts as any[]).find(f => f.qualified_name.includes(n));
+    expect(find('main')?.verdict).toBe('live');
+    expect(find('format')?.verdict).toBe('live');
+    expect(find('neverCalled')?.verdict).toBe('dead');
+  });
+
+  it('removal_reach answers a Java pin pair in the same shape', async () => {
+    const out = parse(await makeRemovalReachHandler()({ project_root: jhead, baseline_root: jbase }));
+    expect(out.scheme).toBe('removal-reach@0.1');
+    const names = (out.removed as any[]).map(r => r.qualified_name);
+    expect(names.some(n => n.includes('neverCalled'))).toBe(true);
+    expect(names.some(n => n.includes('format'))).toBe(false);
+    const ts = parse(await makeRemovalReachHandler()({ project_root: head, baseline_root: base }));
+    expect(Object.keys(out)).toEqual(Object.keys(ts));
+  });
+
+  it('asks for `language` when a tree holds both Java and TypeScript, and honours it', async () => {
+    const mixed = resolve(__dirname, 'fixtures', 'mixed');
+    const r = await makeFindDeadCodeHandler()({ project_root: mixed });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/pass `language`/);
+    const j = parse(await makeFindDeadCodeHandler()({ project_root: mixed, language: 'java' }));
+    expect((j.facts as any[]).every(f => f.file.endsWith('.java'))).toBe(true);
+    const t = parse(await makeFindDeadCodeHandler()({ project_root: mixed, language: 'typescript' }));
+    expect((t.facts as any[]).every(f => !f.file.endsWith('.java'))).toBe(true);
+  });
+});

@@ -20,6 +20,11 @@ linked build of cognium-dev `main`). Contract: C4 0.3.0.
   `baseline_root` = base), every removed declaration with what reached it at
   the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
   `partial[]` for files that did not parse. Declares an `outputSchema`.
+- Both take **Java** projects too, through `circle-ir`'s `buildJavaGraph`
+  (`META-INF/services` files feed the entry index), in the same output shape.
+  A new optional `language` (`java` · `typescript` · `javascript`) picks the
+  graph; by default the only family present is used, and a tree holding both
+  Java and TypeScript/JavaScript is asked to say which.
 - Both carry `engine: { package: "circle-ir", version }`, because the engine's
   schemes do not name the version that computed them. The engine's answer is
   passed through unchanged; only the envelope and truncation are the server's.
