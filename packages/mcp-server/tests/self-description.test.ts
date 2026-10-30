@@ -15,9 +15,13 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { buildServer } from '../src/server.js';
 import { DETERMINISTIC } from '../src/tools/types.js';
+
+/** The hand-written advisory snapshot of the dependency fixtures. */
+const ADVISORY_DB = fileURLToPath(new URL('./fixtures/dependencies/maven-multi/.cognium/advisory/osv-maven', import.meta.url));
 
 let root: string;
 let client: Client;
@@ -86,6 +90,7 @@ function callsFor(projectRoot: string): Array<[string, Record<string, unknown>]>
     ['describe_source', { source_type: 'http_param' }],
     ['attack_surface_summary', { project_root: projectRoot }],
     ['list_reachable_sinks', { project_root: projectRoot }],
+    ['analyze_dependencies', { project_root: projectRoot, advisory_db: ADVISORY_DB }],
     ['refresh', { project_root: projectRoot }],
   ];
 }
@@ -93,7 +98,7 @@ function callsFor(projectRoot: string): Array<[string, Record<string, unknown>]>
 describe('annotations', () => {
   it('are declared on every tool', async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(16);
     for (const tool of tools) {
       expect(tool.annotations, tool.name).toBeDefined();
       expect(typeof tool.annotations?.readOnlyHint, tool.name).toBe('boolean');

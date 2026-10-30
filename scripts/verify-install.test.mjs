@@ -72,3 +72,30 @@ test('a changed description is neither', () => {
   const reworded = { ...baseline[0], description: 'reworded' };
   assert.deepEqual(compareTools(baseline, [reworded, baseline[1]]), { breaking: [], additions: [], dialects: [] });
 });
+
+import { compareContract } from './verify-install.mjs';
+import { readFileSync } from 'node:fs';
+
+test('a release matching the contract has nothing unlisted or missing', () => {
+  assert.deepEqual(compareContract(['refresh', 'scan'], baseline), { unlisted: [], missing: [] });
+});
+
+test('a served tool the contract does not list is reported (it would ship by accident)', () => {
+  assert.deepEqual(compareContract(['refresh', 'scan'], [...baseline, tool('find_dead_code')]), {
+    unlisted: ['find_dead_code'],
+    missing: [],
+  });
+});
+
+test('a listed tool the release does not serve is reported', () => {
+  assert.deepEqual(compareContract(['refresh', 'scan', 'removal_reach'], baseline), {
+    unlisted: [],
+    missing: ['removal_reach'],
+  });
+});
+
+test('contract-tools.json names each tool once', () => {
+  const doc = JSON.parse(readFileSync(new URL('../packages/mcp-server/contract-tools.json', import.meta.url), 'utf8'));
+  assert.equal(doc.contract, 'C4');
+  assert.equal(new Set(doc.floor).size, doc.floor.length);
+});

@@ -62,6 +62,31 @@ Add to `~/.cursor/mcp.json`:
 
 The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cognium-dev) for Cursor (`mcp.json`) and Claude Code (`.mcp.json`). That plugin also ships skills, rules, commands, and a SAST reviewer agent.
 
+### Which directories the tools may read
+
+Every path a tool is given (`path`, `project_root`, `baseline_root`,
+`advisory_db`, and a module's own path arguments) must lie inside an
+**allowed root**. A path is judged by where it really is: it is resolved with
+`realpath`, so `..` and a symlink that leads out of a root are refused like
+any other path outside it. A refused call is a normal result with
+`isError: true` and one line saying so; the tool does not run.
+
+Over stdio the allowed root is **the directory the client starts the server
+in**. To allow others, list them in `COGNIUM_MCP_ALLOWED_ROOTS`, separated by
+`:` (`;` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "cognium": {
+      "command": "npx",
+      "args": ["-y", "@cognium/mcp-server"],
+      "env": { "COGNIUM_MCP_ALLOWED_ROOTS": "/home/me/src:/home/me/work" }
+    }
+  }
+}
+```
+
 ## Tools
 
 | Tool | Purpose |
@@ -74,21 +99,77 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `attack_surface_summary` | Roll-up: entry points × sinks × cross-file taint paths + top files by finding count. |
 | `check_sanitizer` | Deterministic yes/no on whether a function is a recognized sanitizer for a sink category. |
 | `describe_sink` | CWE, remediation, CVSS-like severity, and sanitizer list for a sink category. |
-| `describe_source` | Every framework API pattern circle-ir treats as a source of a given category. |
+| `describe_source` | Every framework API pattern the engine treats as a source of a given category. |
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
+| `analyze_dependencies` | Known advisories in a project's resolved dependencies (Maven, Gradle, npm), matched against an OSV advisory snapshot per ecosystem you supply; with `baseline_root`, what a change removed and added. See below. |
+| `find_dead_code` | For each declaration of a TypeScript / JavaScript, Java, Python or Go project: **live** (reachable from an entry point), **may be live** (only through an uncertain call, a value reference or a file that did not parse; the reason is listed) or **dead**. Each answer says whether a test still reaches it; code reached only by tests is reported as dead, with the test named. A fact, never a removal decision. |
+| `removal_reach` | For a change between two checked-out trees (`baseline_root` = before, `project_root` = after): everything removed that was still reachable before the change, with the path that reached it. Code that only moved or was renamed is listed apart, not as removed. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
+
+### `analyze_dependencies`
+
+Resolves each manifest directory to its dependency set from the best input
+present, and says which: a caller-named file (`resolved`), `gradle.lockfile`,
+the `dependency-tree.txt` / `dependency-list.txt` a build writes
+(`mvn dependency:tree -DoutputFile=dependency-tree.txt`), or else the build
+file itself (`kind: "declared"`, direct dependencies only). It then matches
+every coordinate against the advisory snapshot at `advisory_db` — a directory
+of OSV records, as `unzip Maven/all.zip` from OSV.dev leaves it; default
+`<project_root>/.cognium/advisory/osv-maven`.
+
+It never downloads a snapshot and never runs a build: the answer depends only
+on the tree, the snapshot and this version, and carries the snapshot's
+`digest` and `snapshotDate` (the newest record in it) so the caller can pin
+both. Each match gives the advisory id and aliases (CVE), the affected ranges,
+the later fixed versions, the record's own severity fields (copied, never
+ranked), the dependency's path from a direct dependency, and the version the
+POMs declare for it with where that comes from (`direct`, `property`,
+`dependencyManagement`, a parent's, a BOM, an external parent). Withdrawn
+records are listed by id and never matched. Test-only dependencies are left
+out unless `include_dev` is true.
+
+With `baseline_root` (the same project at an earlier commit), the answer adds
+`delta` — advisories `removed`, `added` and `persisting`, each with the
+versions seen on both sides, and the dependency drift — and the baseline's
+`resolution`, both under the one snapshot.
+
+**npm.** Each `package.json` directory resolves from, in order: a
+caller-named file (`resolved[]` with `kind` `npm-package-lock`, `pnpm-lock`
+or `yarn-lock`), `pnpm-lock.yaml` (a workspace lockfile answers once for
+every importer it lists), `package-lock.json`, Yarn classic `yarn.lock`, else
+the `package.json` itself. Ranges and dist-tags are never matched; they count
+as unresolved. `node_modules/` is never read. The npm snapshot is
+`advisory_dbs.npm`, default `<project_root>/.cognium/advisory/osv-npm`
+(`unzip npm/all.zip`). `ecosystems` (`maven`, `npm`) defaults to every
+ecosystem with a manifest; when npm is matched, `advisoryDb` is a list with
+one entry per ecosystem.
+
+### `find_dead_code` and `removal_reach`
+
+Both answer from the same call graph and entry points, which the engine builds
+per language (TypeScript and JavaScript together, Java, Python, Go). Pass
+`language` when a tree holds more than one; otherwise the one present is used.
+Both include the engine version, so an answer can be reproduced.
+
+Before deleting code:
+
+1. `find_dead_code` on the project root. Act only on **dead** answers that no
+   test reaches.
+2. Make the change.
+3. `removal_reach` with the project before the change as `baseline_root`. An
+   empty list means nothing reachable was removed.
 
 ## Resources
 
 | URI | Content |
 | --- | ------- |
 | `cognium://sast-finding-schema` | JSON Schema for `SastFinding` |
-| `cognium://sink-catalog` | Every taint sink pattern known to circle-ir |
+| `cognium://sink-catalog` | Every taint sink pattern the engine knows |
 | `cognium://source-catalog` | Every taint source pattern |
 | `cognium://sanitizer-catalog` | Every sanitizer entry, indexed by sink type |
-| `cognium://passes` | Contents of circle-ir `docs/PASSES.md` — canonical pass registry |
+| `cognium://passes` | The engine's pass registry: every analysis pass, with its rule id and CWE |
 
 ## Suggested tool-call flow
 
@@ -193,10 +274,18 @@ out — builds a fresh server per request, and serves both protocol eras:
 ```ts
 import { createHandler } from '@cognium/mcp-server';
 
-const handler = createHandler();
+// Name the directories a caller may have analysed. Without this, every
+// path argument is refused: over HTTP the caller is not the machine's owner.
+const handler = createHandler({ allowedRoots: ['/srv/checkouts'] });
 // Hono, Workers, Deno, Bun: hand it the request.
 app.all('/mcp', (c) => handler.fetch(c.req.raw));
 ```
+
+**Allowed roots are required for HTTP hosting.** `createHandler()` reads
+`allowedRoots`, else `COGNIUM_MCP_ALLOWED_ROOTS`; with neither, no directory
+is readable and every path-taking tool answers with an error (the tools that
+take no path still work). Point the roots at the checkouts you mean to serve,
+never at `/` or a home directory: findings quote the source they come from.
 
 To inspect what the install loaded, or to connect a transport of your own:
 
@@ -210,7 +299,9 @@ await server.connect(myTransport); // serves the 2025-era protocol only
 ```
 
 `buildServer(options)` is the synchronous form: it registers exactly what you
-pass and resolves nothing.
+pass and resolves nothing. It is **unconfined by default**, because a caller
+in its own process already owns the paths it passes; give it `allowedRoots`
+whenever the arguments come from someone else.
 
 ## Optional tool modules
 
@@ -263,12 +354,16 @@ decides what is *listed*, and the terms carry the grant.
 ## What a response and a tool tell you
 
 - **`provenance`** is the last field of every successful response:
-  `"deterministic"` for all eleven built-in tools. A tool from an optional module
+  `"deterministic"` for all fourteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
-- **Annotations** are declared on every tool in `tools/list`. Ten are
+- **Annotations** are declared on every tool in `tools/list`. Thirteen are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
   deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
   writes no file, but it clears the server's in-memory cache.
+- **`structuredContent`.** Every tool declares an `outputSchema`, and every
+  successful answer carries `structuredContent`: the same object as the JSON
+  text, so a client can validate it. Nested engine objects are open to new
+  fields; the top-level fields are the tool's.
 - **Errors.** A malformed request gets a JSON-RPC error: `-32602` for bad
   parameters or a tool that does not exist, `-32601` for an unknown method. A
   well-formed call a tool cannot serve — an unknown sink type, a missing path —

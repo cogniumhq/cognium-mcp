@@ -50,7 +50,14 @@ try {
 
   const verify = spawnSync(
     'node',
-    ['scripts/verify-install.mjs', tarball, '--same-tools-as', `${manifest.name}@${published}`],
+    [
+      'scripts/verify-install.mjs',
+      tarball,
+      '--same-tools-as',
+      `${manifest.name}@${published}`,
+      '--contract',
+      'packages/mcp-server/contract-tools.json',
+    ],
     { stdio: 'inherit', env },
   );
 
@@ -89,6 +96,16 @@ try {
       console.error(
         'release check: a package installed but did not SERVE, so no tool list was compared. This is not a ' +
           'tool-list break and a new major does not excuse it.',
+      );
+      process.exit(1);
+      break;
+
+    case EXIT.offContract:
+      // Never excused, not even by a major: a tool ships only after C4 lists it.
+      console.error(
+        'release check: the tools this release serves differ from packages/mcp-server/contract-tools.json, ' +
+          'which mirrors the tools C4 §11 lists as shipping. Write the tool into C4 first, then into that file ' +
+          '(C4 §7 rules 6–7).',
       );
       process.exit(1);
       break;

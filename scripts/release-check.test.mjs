@@ -131,3 +131,12 @@ test('republishing the same version is refused before anything is installed', ()
   assert.equal(status, 1);
   assert.match(out, /already published; bump the version first/);
 });
+
+test('a release off the contract fails, and a new major does not excuse it (C4 §7 rule 7)', () => {
+  for (const version of ['0.5.0', '1.0.0']) {
+    const { status, out } = runWith({ exitCode: EXIT.offContract, version, published: '0.4.0' });
+    assert.equal(status, 1);
+    assert.match(out, /differ from packages\/mcp-server\/contract-tools\.json/);
+    assert.doesNotMatch(out, /allowed/);
+  }
+});

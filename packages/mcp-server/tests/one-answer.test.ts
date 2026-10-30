@@ -8,7 +8,7 @@
  * parsed JSON, so a difference in field order or number formatting fails too.
  *
  * Both doors load the same optional module by specifier, so the comparison
- * covers the loader as well as the thirteen built-in tools.
+ * covers the loader as well as the fourteen built-in tools.
  *
  * What is and is not compared, stated here rather than quietly left out:
  *
@@ -35,6 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHandler, resetDiscoveryForTests } from '../src/server.js';
 import { resetEnablementForTests, ENV_CONFIG_DIR, ENV_ENDPOINT, ENV_LICENSE, ENV_LICENSE_PUBKEY } from '../src/enablement.js';
 import { ENV_MODULES } from '../src/modules.js';
+import { ENV_ALLOWED_ROOTS } from '../src/roots.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
@@ -49,6 +50,9 @@ const moduleSpecifier = pathToFileURL(resolve(here, 'fixtures/one-answer/module.
 const SHARED_ENV: Record<string, string> = {
   [ENV_CONFIG_DIR]: '/nonexistent/cognium-one-answer',
   [ENV_MODULES]: moduleSpecifier,
+  // Both doors read only under the same allowed roots (issue #37): the
+  // fixtures directory, which holds both projects.
+  [ENV_ALLOWED_ROOTS]: resolve(here, 'fixtures'),
 };
 const CLEARED_ENV = [ENV_ENDPOINT, ENV_LICENSE, ENV_LICENSE_PUBKEY];
 
@@ -257,10 +261,10 @@ describe('one answer: stdio and streamable HTTP', () => {
     },
   );
 
-  it('lists the thirteen built-in tools and the module\'s one, on both doors', () => {
+  it('lists the fourteen built-in tools and the module\'s one, on both doors', () => {
     const list = JSON.parse(stdio.get(2)!) as { result: { tools: Array<{ name: string }> } };
     const names = list.result.tools.map((t) => t.name);
-    expect(names).toHaveLength(14);
+    expect(names).toHaveLength(17);
     expect(names).toContain('scan');
     expect(names).toContain('fixture_echo');
     // No endpoint is configured, so the endpoint-backed tool is not listed.
@@ -342,7 +346,7 @@ describe('one answer: the 2026-07-28 revision', () => {
   it('lists the same tools as the older era does', () => {
     const names = (message: string): string[] =>
       (JSON.parse(message) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
-    expect(names(stdio.get(2)!)).toHaveLength(14);
+    expect(names(stdio.get(2)!)).toHaveLength(17);
   });
 
   it('refuses a revision it does not speak with the same error on both doors', async () => {
@@ -377,7 +381,7 @@ describe('one answer: the 2026-07-28 revision', () => {
     // What keeps existing clients working: a plain request is 2025-era
     // traffic and is served, statelessly, by the same handler.
     const legacy = await overHttp({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    expect((JSON.parse(legacy) as { result?: { tools: unknown[] } }).result?.tools).toHaveLength(14);
+    expect((JSON.parse(legacy) as { result?: { tools: unknown[] } }).result?.tools).toHaveLength(17);
   });
 });
 

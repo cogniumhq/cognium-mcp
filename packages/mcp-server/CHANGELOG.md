@@ -4,6 +4,101 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.8.0] - 2026-10-30
+
+Tested against `circle-ir` 4.18.0 (a packed build of cognium-dev #995, before publish). Needs `circle-ir` **4.18.0**. It carries the advisory matcher, Maven version
+order and declared-version reader, and the dead-code and removal-reach facts
+these tools are built on. A `circle-ir` minor, so the release train applies:
+`circle-ir` 4.18.0, then `circle-ir-ai` on 4.18, then this package. Contract:
+C4 0.3.0.
+
+### Added
+
+- **`analyze_dependencies`**, a new built-in tool (deterministic, offline,
+  read-only, closed-world, with an `outputSchema`). Resolves a Java project's
+  manifests (Maven, Gradle) to their dependency sets — from a Gradle lockfile
+  or Maven `dependency:tree` / `dependency:list` output when present, else the
+  build file — and matches them against an OSV advisory snapshot the caller
+  supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
+  `baseline_root`, adds the advisories a change removed, added and left, and
+  the dependency drift. The snapshot is indexed once per content (digest) per
+  process.
+- **`analyze_dependencies` covers npm (C4 0.4 §11a2, T-DT3.8).**
+  `ecosystems` takes `["maven", "npm"]`; when absent, every ecosystem with a
+  manifest in the tree, and one asked for with no manifest is listed in
+  `coverage.notPresent`, not refused. Each `package.json` directory resolves
+  from the best input present: a caller-named `resolved[]` file
+  (`npm-package-lock`, `pnpm-lock`, `yarn-lock`), `pnpm-lock.yaml` (its own
+  or a workspace lockfile listing it as an importer), `package-lock.json` /
+  `npm-shrinkwrap.json` (its own or an npm-workspaces root's), a Yarn classic
+  `yarn.lock`, else the `package.json` itself (`declared`, direct only). A
+  range, a dist-tag or `unknown` is never matched and counts as unresolved;
+  `node_modules/` is never read; `include_dev` governs `devDependencies`.
+  New optional `advisory_dbs { maven?, npm? }`; the npm snapshot defaults to
+  `<project_root>/.cognium/advisory/osv-npm` (the `unzip npm/all.zip` of
+  OSV.dev). Each index sees only its own ecosystem's packages. When npm is
+  matched, `advisoryDb` is one entry per ecosystem with `ecosystem` added,
+  and dependencies, matches and drift carry `ecosystem`; delta and drift key
+  on ecosystem + name. A defaulted npm without its snapshot is left in
+  `notCovered`, so a Maven-only answer is the same as before.
+- **`find_dead_code`** — per declaration of a TypeScript / JavaScript project,
+  the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or
+  `dead`, the shortest strong and weak paths from a product entry, unresolved
+  sites, and `reachedByTest`. Inputs `project_root`, `root_kinds[]`,
+  `verdicts[]`, `limit`. Declares an `outputSchema`; read-only, local.
+- **`removal_reach`** — for two checked-out trees (`project_root` = head,
+  `baseline_root` = base), every removed declaration with what reached it at
+  the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
+  `partial[]` for files that did not parse. Declares an `outputSchema`.
+- Both take **Java**, **Python** and **Go** projects too, in the same output
+  shape: Java through `circle-ir`'s `buildJavaGraph` (`META-INF/services`
+  files feed the entry index), Python through `buildPythonGraph` (console
+  scripts from a root `pyproject.toml`'s `[project.scripts]` are `main`
+  entries), Go through `buildGoGraph` (the module path from a root `go.mod`).
+  A new optional `language` (`java` · `python` · `go` · `typescript` ·
+  `javascript`) picks the graph; by default the only family present is used,
+  and a tree holding more than one is asked to say which.
+- Both carry `engine: { package: "circle-ir", version }`, because the engine's
+  schemes do not name the version that computed them. The engine's answer is
+  passed through unchanged; only the envelope and truncation are the server's.
+- **Every tool declares an `outputSchema` and returns `structuredContent` (#38)**:
+  the same object as the JSON text, built from one serialisation. Top-level
+  fields are the tool's envelope; nested engine objects stay open to new
+  fields. The SDK client validates the answer against the schema.
+- Sixteen built-in tools.
+
+### Security
+
+- **Allowed roots (#37).** Every path argument of every tool, the built-in
+  ones and a module's, is now resolved with `realpath` and refused unless it
+  lies inside an allowed root, so neither `..`, an absolute path nor a symlink
+  can lead a tool out of the directories it was meant to read. Before this, a
+  token holder of a server mounted over HTTP could have any directory on the
+  host analysed, and findings quote string literals from the files read.
+  - `createHandler()` takes `allowedRoots`, else reads
+    `COGNIUM_MCP_ALLOWED_ROOTS`; **with neither it allows no directory.**
+    Hosts must now name their roots (circle-pack: its checkout directory).
+  - The stdio binary allows `COGNIUM_MCP_ALLOWED_ROOTS`, else **the working
+    directory**. A client that analysed projects outside the directory it
+    starts the server in must now list them in that variable.
+  - `buildServer()` takes `allowedRoots` and stays unconfined when given none
+    (an in-process caller owns its paths). `ToolContext.allowedRoots` tells a
+    module the roots, for paths it reads on its own.
+  - A path containing a NUL byte is refused everywhere.
+  - The `META-INF/services` walk behind `find_dead_code` / `removal_reach`
+    no longer follows symlinks.
+- **`@modelcontextprotocol/server` and `@modelcontextprotocol/core` move from
+  2.2 to `^2.3.1`** (2.4.0 in the lockfile). 2.0–2.2 carried two
+  high-severity advisories: a shared transport could deliver a message to the
+  wrong client, and a crafted request could exhaust memory. The client
+  (a dev dependency) moves to `^2.3.1` as well. Note: from 2.4.0 these
+  packages are licensed Apache-2.0 (previously MIT).
+- **`zod` moves to `^4.6.6`** (4.6.7 in the lockfile); versions before 4.6.6
+  carry a high-severity advisory.
+- `npm audit --omit=dev` reports no vulnerabilities.
+
 ## [0.7.0] - 2026-10-17
 
 Tested against `circle-ir` **4.16.1**. The optional module to pair it with is

@@ -63,7 +63,7 @@ describe('createServer', () => {
     const names = Object.keys(
       (server as unknown as { _registeredTools?: Record<string, unknown> })._registeredTools ?? {},
     );
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(16);
     expect(discovery.enablement.state).toBe('floor');
   });
 

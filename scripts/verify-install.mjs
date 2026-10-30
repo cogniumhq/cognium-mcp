@@ -2,7 +2,7 @@
 /**
  * Install the server the way a user does and check what it serves.
  *
- *   node scripts/verify-install.mjs <spec> [--same-tools-as <spec>]
+ *   node scripts/verify-install.mjs <spec> [--same-tools-as <spec>] [--contract <file>]
  *
  * A spec is anything `npm install` accepts: a tarball path from `npm pack`,
  * or `@cognium/mcp-server@0.2.0`. Each spec is installed into its own empty
@@ -22,6 +22,12 @@
  *     say so, because a validator that only knows the old dialect will
  *     refuse to compile the new one.
  *
+ * With `--contract`, the candidate's tool names must be **exactly** the list
+ * in that file (`contract-tools.json`: the floor tools C4 §11 lists as
+ * shipping). A tool the contract does not list, or a listed tool the
+ * candidate does not serve, stops the release (C4 §7 rule 7): a tool is
+ * written into the contract before it ships, and never ships by accident.
+ *
  * **Exit codes are distinct on purpose.** `release-check.mjs` grants a new
  * major one exemption — a tool list that breaks deliberately — and it may
  * grant it only for a tool list that actually broke. While every failure here
@@ -35,10 +41,11 @@
  *   2  usage
  *   3  a spec did not install (pack or `npm install` failed, registry, ETARGET)
  *   4  a spec installed but did not serve, or served no tools
+ *   5  the candidate's tools differ from the contract's list — never excusable
  */
 
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -47,7 +54,7 @@ import { pathToFileURL } from 'node:url';
 const BIN = 'mcp-server-cognium-dev';
 
 /** See the header: a caller branches on these, so they are part of the contract. */
-export const EXIT = { ok: 0, toolListBreaks: 1, usage: 2, didNotInstall: 3, didNotServe: 4 };
+export const EXIT = { ok: 0, toolListBreaks: 1, usage: 2, didNotInstall: 3, didNotServe: 4, offContract: 5 };
 
 /** A spec that could not be installed. Never a statement about its tools. */
 export class InstallError extends Error {
@@ -185,6 +192,28 @@ export function compareTools(baseline, candidate) {
   return { breaking, additions, dialects };
 }
 
+/**
+ * Compare a served tool list with the contract's list of tool names.
+ * Returns { unlisted, missing }: served but not in the contract, and in the
+ * contract but not served. Both empty means the release matches C4.
+ */
+export function compareContract(contractNames, candidate) {
+  const served = new Set(candidate.map((tool) => tool.name));
+  const listed = new Set(contractNames);
+  return {
+    unlisted: [...served].filter((name) => !listed.has(name)).sort(),
+    missing: [...listed].filter((name) => !served.has(name)).sort(),
+  };
+}
+
+function readContract(file) {
+  const doc = JSON.parse(readFileSync(file, 'utf8'));
+  if (!Array.isArray(doc.floor) || doc.floor.some((name) => typeof name !== 'string')) {
+    throw new Error(`${file}: "floor" must be a list of tool names`);
+  }
+  return doc;
+}
+
 async function inspect(spec) {
   const dir = install(spec);
   try {
@@ -206,12 +235,30 @@ async function main(argv) {
   const spec = argv[0];
   const flag = argv.indexOf('--same-tools-as');
   const baselineSpec = flag === -1 ? undefined : argv[flag + 1];
-  if (!spec || (flag !== -1 && !baselineSpec)) {
-    console.error('usage: node scripts/verify-install.mjs <spec> [--same-tools-as <spec>]');
+  const contractFlag = argv.indexOf('--contract');
+  const contractFile = contractFlag === -1 ? undefined : argv[contractFlag + 1];
+  if (!spec || (flag !== -1 && !baselineSpec) || (contractFlag !== -1 && !contractFile)) {
+    console.error('usage: node scripts/verify-install.mjs <spec> [--same-tools-as <spec>] [--contract <file>]');
     return EXIT.usage;
   }
 
   const candidate = await inspect(spec);
+
+  if (contractFile) {
+    let contract;
+    try {
+      contract = readContract(contractFile);
+    } catch (err) {
+      console.error(`contract: ${err.message}`);
+      return EXIT.usage;
+    }
+    const { unlisted, missing } = compareContract(contract.floor, candidate.tools);
+    for (const name of unlisted) console.error(`off contract: "${name}" is served but ${contract.contract} ${contract.contractVersion} does not list it`);
+    for (const name of missing) console.error(`off contract: ${contract.contract} ${contract.contractVersion} lists "${name}" but it is not served`);
+    if (unlisted.length > 0 || missing.length > 0) return EXIT.offContract;
+    console.log(`tools/list matches ${contract.contract} ${contract.contractVersion} (${contract.floor.length} tools)`);
+  }
+
   if (!baselineSpec) return EXIT.ok;
 
   const baseline = await inspect(baselineSpec);

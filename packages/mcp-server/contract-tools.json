@@ -1,0 +1,23 @@
+{
+  "$comment": "The floor tools C4 (techspec services/cognium-engine/reference/engine-tool-contract.md, section 11) lists as shipping in this package's next release. The release check refuses a release whose tools/list differs from this list (C4 section 7, rule 7). Add a tool here in the same PR that registers it, after its C4 row is merged.",
+  "contract": "C4",
+  "contractVersion": "0.3.0",
+  "floor": [
+    "analyze_dependencies",
+    "attack_surface_summary",
+    "check_sanitizer",
+    "describe_sink",
+    "describe_source",
+    "explain_finding",
+    "find_callees",
+    "find_callers",
+    "find_dead_code",
+    "find_similar",
+    "list_entry_points",
+    "list_reachable_sinks",
+    "refresh",
+    "removal_reach",
+    "scan",
+    "taint_paths"
+  ]
+}

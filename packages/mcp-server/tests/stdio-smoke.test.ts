@@ -85,6 +85,7 @@ const INITIALIZED = { jsonrpc: '2.0', method: 'notifications/initialized' };
 const TOOLS_LIST = { jsonrpc: '2.0', id: 2, method: 'tools/list' };
 
 const FLOOR_TOOLS = [
+  'analyze_dependencies',
   'attack_surface_summary',
   'check_sanitizer',
   'describe_sink',
@@ -92,16 +93,18 @@ const FLOOR_TOOLS = [
   'explain_finding',
   'find_callees',
   'find_callers',
+  'find_dead_code',
   'find_similar',
   'list_entry_points',
   'list_reachable_sinks',
   'refresh',
+  'removal_reach',
   'scan',
   'taint_paths',
 ];
 
 describe('the built bin over stdio', () => {
-  it('completes a handshake and lists the 13 floor tools', async () => {
+  it('completes a handshake and lists the 16 floor tools', async () => {
     const { responses } = await exchange([INITIALIZE, INITIALIZED, TOOLS_LIST]);
 
     const init = responses.find((r) => r.id === 1);
@@ -181,6 +184,6 @@ describe('the built library entry', () => {
       { timeout: 30_000, stdio: 'pipe' },
     ).toString();
 
-    expect(out).toBe('13');
+    expect(out).toBe('16');
   }, 60_000);
 });

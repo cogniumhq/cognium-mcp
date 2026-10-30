@@ -32,6 +32,7 @@ import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import {
   truncateArray, truncateString, MAX_FINDINGS, MAX_TAINT_PATHS, MAX_STRING_LEN,
 } from '../util/serialize.js';
+import { scanOutputShape } from './output-shapes.js';
 
 export const scanInputShape = {
   path: z.string().describe('Absolute path to a file or directory to scan.'),
@@ -63,6 +64,7 @@ export const scanConfig = {
     'plus per-file taint flows and (for directory scans) cross-file taint paths. Results are cached per ' +
     'project + option-set and invalidated by file mtime, so subsequent tool calls are effectively free.',
   inputSchema: scanInputShape,
+  outputSchema: scanOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
