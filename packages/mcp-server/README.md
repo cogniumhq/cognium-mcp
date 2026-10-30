@@ -103,7 +103,7 @@ in**. To allow others, list them in `COGNIUM_MCP_ALLOWED_ROOTS`, separated by
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
-| `analyze_dependencies` | Known advisories in a Java project's resolved dependencies (Maven, Gradle), matched against an OSV advisory snapshot you supply; with `baseline_root`, what a change removed and added. See below. |
+| `analyze_dependencies` | Known advisories in a project's resolved dependencies (Maven, Gradle, npm), matched against an OSV advisory snapshot per ecosystem you supply; with `baseline_root`, what a change removed and added. See below. |
 | `find_dead_code` | For each declaration of a TypeScript / JavaScript, Java, Python or Go project: **live** (reachable from an entry point), **may be live** (only through an uncertain call, a value reference or a file that did not parse; the reason is listed) or **dead**. Each answer says whether a test still reaches it; code reached only by tests is reported as dead, with the test named. A fact, never a removal decision. |
 | `removal_reach` | For a change between two checked-out trees (`baseline_root` = before, `project_root` = after): everything removed that was still reachable before the change, with the path that reached it. Code that only moved or was renamed is listed apart, not as removed. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
@@ -134,6 +134,17 @@ With `baseline_root` (the same project at an earlier commit), the answer adds
 `delta` — advisories `removed`, `added` and `persisting`, each with the
 versions seen on both sides, and the dependency drift — and the baseline's
 `resolution`, both under the one snapshot.
+
+**npm.** Each `package.json` directory resolves from, in order: a
+caller-named file (`resolved[]` with `kind` `npm-package-lock`, `pnpm-lock`
+or `yarn-lock`), `pnpm-lock.yaml` (a workspace lockfile answers once for
+every importer it lists), `package-lock.json`, Yarn classic `yarn.lock`, else
+the `package.json` itself. Ranges and dist-tags are never matched; they count
+as unresolved. `node_modules/` is never read. The npm snapshot is
+`advisory_dbs.npm`, default `<project_root>/.cognium/advisory/osv-npm`
+(`unzip npm/all.zip`). `ecosystems` (`maven`, `npm`) defaults to every
+ecosystem with a manifest; when npm is matched, `advisoryDb` is a list with
+one entry per ecosystem.
 
 ### `find_dead_code` and `removal_reach`
 

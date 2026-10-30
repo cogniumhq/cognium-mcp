@@ -1,6 +1,6 @@
 /**
- * Advisory snapshot: a directory of OSV records (as `unzip Maven/all.zip`
- * leaves it), read once per content and kept indexed in memory.
+ * Advisory snapshot: a directory of OSV records (as `unzip Maven/all.zip` or
+ * `unzip npm/all.zip` leaves it), read once per content and kept indexed in memory.
  *
  * The snapshot is an input the caller pins; this module never downloads
  * anything. Its identity is a digest over the records it holds, so the same
@@ -25,14 +25,14 @@ export interface Snapshot {
 
 export class SnapshotError extends Error {}
 
-function jsonFiles(dir: string): string[] {
+function jsonFiles(dir: string, label: string): string[] {
   let names: string[];
   try {
-    if (!statSync(dir).isDirectory()) throw new SnapshotError(`advisory_db is not a directory: ${dir}`);
+    if (!statSync(dir).isDirectory()) throw new SnapshotError(`${label} is not a directory: ${dir}`);
     names = readdirSync(dir);
   } catch (err) {
     if (err instanceof SnapshotError) throw err;
-    throw new SnapshotError(`advisory_db not found: ${dir}`);
+    throw new SnapshotError(`${label} not found: ${dir}`);
   }
   return names.filter((n) => n.endsWith('.json')).sort();
 }
@@ -57,13 +57,17 @@ export class SnapshotCache {
 
   constructor(private readonly capacity = 2) {}
 
-  /** Read (or reuse) the snapshot at `dir`. Throws `SnapshotError` with one line. */
-  load(dir: string): { snapshot: Snapshot; cacheHit: boolean } {
-    const names = jsonFiles(dir);
+  /**
+   * Read (or reuse) the snapshot at `dir`, indexed for `ecosystem` (OSV name:
+   * `Maven`, `npm`). Throws `SnapshotError` with one line naming `label`, the
+   * argument the directory came from.
+   */
+  load(dir: string, ecosystem = 'Maven', label = 'advisory_db'): { snapshot: Snapshot; cacheHit: boolean } {
+    const names = jsonFiles(dir, label);
     const statKey = statKeyOf(dir, names);
-    const known = this.byDir.get(dir);
+    const known = this.byDir.get(`${ecosystem}\0${dir}`);
     if (known && known.statKey === statKey) {
-      const index = this.byDigest.get(known.digest);
+      const index = this.byDigest.get(`${ecosystem}\0${known.digest}`);
       if (index) return { snapshot: { path: dir, digest: known.digest, files: known.files, index }, cacheHit: true };
     }
 
@@ -75,9 +79,12 @@ export class SnapshotCache {
       texts.push(bytes.toString('utf8'));
     }
     const digest = `sha256:${createHash('sha256').update(lines.join('')).digest('hex')}`;
-    this.byDir.set(dir, { statKey, digest, files: names.length });
+    this.byDir.set(`${ecosystem}\0${dir}`, { statKey, digest, files: names.length });
 
-    let index = this.byDigest.get(digest);
+    // One index per (records, ecosystem): the same directory read as Maven
+    // and as npm gives two indexes over the same digest.
+    const indexKey = `${ecosystem}\0${digest}`;
+    let index = this.byDigest.get(indexKey);
     const cacheHit = index !== undefined;
     if (!index) {
       const records: OsvRecord[] = [];
@@ -85,13 +92,13 @@ export class SnapshotCache {
         const r = parseOsvRecord(t);
         if (r) records.push(r);
       }
-      if (records.length === 0) throw new SnapshotError(`advisory_db holds no OSV records: ${dir}`);
-      index = buildAdvisoryIndex(records, 'Maven');
-      this.byDigest.set(digest, index);
+      if (records.length === 0) throw new SnapshotError(`${label} holds no OSV records: ${dir}`);
+      index = buildAdvisoryIndex(records, ecosystem);
+      this.byDigest.set(indexKey, index);
       while (this.byDigest.size > this.capacity) this.byDigest.delete(this.byDigest.keys().next().value as string);
     } else {
-      this.byDigest.delete(digest);
-      this.byDigest.set(digest, index);
+      this.byDigest.delete(indexKey);
+      this.byDigest.set(indexKey, index);
     }
     return { snapshot: { path: dir, digest, files: names.length, index }, cacheHit };
   }

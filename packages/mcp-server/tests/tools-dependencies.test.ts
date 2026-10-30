@@ -141,6 +141,22 @@ describe('analyze_dependencies — one tree', () => {
     expect(body.matches[0].fixedIn).toEqual(['4.1.108.Final']);
   });
 
+  it('reads legacy per-configuration lockfiles under gradle/dependency-locks/', async () => {
+    const root = join(tmp, 'gradle-legacy');
+    mkdirSync(join(root, 'gradle', 'dependency-locks'), { recursive: true });
+    writeFileSync(join(root, 'build.gradle'), readFileSync(join(GRADLE, 'build.gradle')));
+    writeFileSync(join(root, 'gradle', 'dependency-locks', 'runtimeClasspath.lockfile'), 'org.yaml:snakeyaml:1.33\n');
+    writeFileSync(join(root, 'gradle', 'dependency-locks', 'compileClasspath.lockfile'), 'io.netty:netty-buffer:4.1.100.Final\n');
+    writeFileSync(join(root, 'gradle', 'dependency-locks', 'notes.txt'), 'not a lockfile');
+    const { body } = await run({ project_root: root, advisory_db: SNAPSHOT });
+    expect(body.resolution[0]).toMatchObject({
+      manifest: 'build.gradle',
+      kind: 'lockfile',
+      input: 'gradle/dependency-locks/compileClasspath.lockfile, gradle/dependency-locks/runtimeClasspath.lockfile',
+    });
+    expect(body.dependencies.map((d: Answer) => d.name)).toEqual(['io.netty:netty-buffer', 'org.yaml:snakeyaml']);
+  });
+
   it('falls back to the build file, says so, and names what it did not cover', async () => {
     const { body } = await run({ project_root: DECLARED, advisory_db: SNAPSHOT });
     expect(body.resolution).toEqual([

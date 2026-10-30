@@ -25,6 +25,24 @@ C4 0.3.0.
   `baseline_root`, adds the advisories a change removed, added and left, and
   the dependency drift. The snapshot is indexed once per content (digest) per
   process.
+- **`analyze_dependencies` covers npm (C4 0.4 §11a2, T-DT3.8).**
+  `ecosystems` takes `["maven", "npm"]`; when absent, every ecosystem with a
+  manifest in the tree, and one asked for with no manifest is listed in
+  `coverage.notPresent`, not refused. Each `package.json` directory resolves
+  from the best input present: a caller-named `resolved[]` file
+  (`npm-package-lock`, `pnpm-lock`, `yarn-lock`), `pnpm-lock.yaml` (its own
+  or a workspace lockfile listing it as an importer), `package-lock.json` /
+  `npm-shrinkwrap.json` (its own or an npm-workspaces root's), a Yarn classic
+  `yarn.lock`, else the `package.json` itself (`declared`, direct only). A
+  range, a dist-tag or `unknown` is never matched and counts as unresolved;
+  `node_modules/` is never read; `include_dev` governs `devDependencies`.
+  New optional `advisory_dbs { maven?, npm? }`; the npm snapshot defaults to
+  `<project_root>/.cognium/advisory/osv-npm` (the `unzip npm/all.zip` of
+  OSV.dev). Each index sees only its own ecosystem's packages. When npm is
+  matched, `advisoryDb` is one entry per ecosystem with `ecosystem` added,
+  and dependencies, matches and drift carry `ecosystem`; delta and drift key
+  on ecosystem + name. A defaulted npm without its snapshot is left in
+  `notCovered`, so a Maven-only answer is the same as before.
 - **`find_dead_code`** — per declaration of a TypeScript / JavaScript project,
   the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or
   `dead`, the shortest strong and weak paths from a product entry, unresolved

@@ -1,0 +1,43 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      minimist:
+        specifier: ^1.2.0
+        version: 1.2.5
+
+  packages/web:
+    dependencies:
+      '@acme/widget':
+        specifier: ^2.0.0
+        version: 2.0.0
+      lodash:
+        specifier: ^4.17.0
+        version: 4.17.20
+
+packages:
+
+  '@acme/widget@2.0.0':
+    resolution: {integrity: sha512-AAAA}
+
+  lodash@4.17.20:
+    resolution: {integrity: sha512-BBBB}
+
+  minimist@1.2.5:
+    resolution: {integrity: sha512-CCCC}
+
+snapshots:
+
+  '@acme/widget@2.0.0':
+    dependencies:
+      lodash: 4.17.20
+
+  lodash@4.17.20: {}
+
+  minimist@1.2.5: {}
