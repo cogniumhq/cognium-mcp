@@ -98,7 +98,7 @@ function callsFor(projectRoot: string): Array<[string, Record<string, unknown>]>
 describe('annotations', () => {
   it('are declared on every tool', async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(14);
+    expect(tools).toHaveLength(16);
     for (const tool of tools) {
       expect(tool.annotations, tool.name).toBeDefined();
       expect(typeof tool.annotations?.readOnlyHint, tool.name).toBe('boolean');

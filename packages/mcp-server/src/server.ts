@@ -34,6 +34,12 @@ import { refreshConfig, makeRefreshHandler } from './tools/refresh.js';
 import { analyzeDependenciesConfig, makeAnalyzeDependenciesHandler } from './tools/analyze-dependencies.js';
 import { SnapshotCache } from './deps/snapshot.js';
 import {
+  findDeadCodeConfig,
+  makeFindDeadCodeHandler,
+  removalReachConfig,
+  makeRemovalReachHandler,
+} from './tools/graph-facts.js';
+import {
   findCallersConfig,
   makeFindCallersHandler,
   findCalleesConfig,
@@ -109,6 +115,8 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   server.registerTool('find_callers', findCallersConfig, makeFindCallersHandler(ctx) as never);
   server.registerTool('find_callees', findCalleesConfig, makeFindCalleesHandler(ctx) as never);
   server.registerTool('analyze_dependencies', analyzeDependenciesConfig, makeAnalyzeDependenciesHandler(SNAPSHOTS) as never);
+  server.registerTool('find_dead_code', findDeadCodeConfig, makeFindDeadCodeHandler() as never);
+  server.registerTool('removal_reach', removalReachConfig, makeRemovalReachHandler() as never);
   server.registerTool('refresh', refreshConfig, makeRefreshHandler(ctx) as never);
 
   registerResources(server);

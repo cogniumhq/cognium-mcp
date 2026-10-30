@@ -6,10 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Needs `circle-ir` **4.18.0** (not yet published: it carries the advisory
-matcher, Maven version order and declared-version reader this tool is built
-on). A `circle-ir` minor, so the release train applies: `circle-ir` 4.18.0,
-then `circle-ir-ai` on 4.18, then this package.
+## [0.8.0] - 2026-10-30
+
+Tested against `circle-ir` 4.18.0 (a packed build of cognium-dev #995, before publish). Needs `circle-ir` **4.18.0**. It carries the advisory matcher, Maven version
+order and declared-version reader, and the dead-code and removal-reach facts
+these tools are built on. A `circle-ir` minor, so the release train applies:
+`circle-ir` 4.18.0, then `circle-ir-ai` on 4.18, then this package. Contract:
+C4 0.3.0.
 
 ### Added
 
@@ -21,7 +24,25 @@ then `circle-ir-ai` on 4.18, then this package.
   supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
   `baseline_root`, adds the advisories a change removed, added and left, and
   the dependency drift. The snapshot is indexed once per content (digest) per
-  process. Fourteen built-in tools.
+  process.
+- **`find_dead_code`** — per declaration of a TypeScript / JavaScript project,
+  the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or
+  `dead`, the shortest strong and weak paths from a product entry, unresolved
+  sites, and `reachedByTest`. Inputs `project_root`, `root_kinds[]`,
+  `verdicts[]`, `limit`. Declares an `outputSchema`; read-only, local.
+- **`removal_reach`** — for two checked-out trees (`project_root` = head,
+  `baseline_root` = base), every removed declaration with what reached it at
+  the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
+  `partial[]` for files that did not parse. Declares an `outputSchema`.
+- Both take **Java** projects too, through `circle-ir`'s `buildJavaGraph`
+  (`META-INF/services` files feed the entry index), in the same output shape.
+  A new optional `language` (`java` · `typescript` · `javascript`) picks the
+  graph; by default the only family present is used, and a tree holding both
+  Java and TypeScript/JavaScript is asked to say which.
+- Both carry `engine: { package: "circle-ir", version }`, because the engine's
+  schemes do not name the version that computed them. The engine's answer is
+  passed through unchanged; only the envelope and truncation are the server's.
+- Sixteen built-in tools.
 
 ## [0.7.0] - 2026-10-17
 
