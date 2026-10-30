@@ -3,6 +3,7 @@
   "contract": "C4",
   "contractVersion": "0.3.0",
   "floor": [
+    "analyze_dependencies",
     "attack_surface_summary",
     "check_sanitizer",
     "describe_sink",
@@ -10,10 +11,12 @@
     "explain_finding",
     "find_callees",
     "find_callers",
+    "find_dead_code",
     "find_similar",
     "list_entry_points",
     "list_reachable_sinks",
     "refresh",
+    "removal_reach",
     "scan",
     "taint_paths"
   ]
