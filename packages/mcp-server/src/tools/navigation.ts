@@ -30,6 +30,7 @@ import { resolve } from 'path';
 import type { NavigationAnswer, Tier } from 'circle-ir';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
+import { navigationOutputShape } from './output-shapes.js';
 
 /** Cap on `answers[]`. A truncated list always says so. */
 export const MAX_NAVIGATION_ANSWERS = 200;
@@ -121,6 +122,7 @@ export const findCallersConfig = {
     '`scope` states what was searched and what was skipped, so a count can be read against its ' +
     'denominator. Deterministic: no model is consulted.',
   inputSchema: findCallersInputShape,
+  outputSchema: navigationOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
@@ -139,6 +141,7 @@ export const findCalleesConfig = {
     'A constructor appears as a target ending `.<init>`, while `methodName` is the name as written ' +
     'at the call site, so the two differ for a `new` expression. Deterministic: no model is consulted.',
   inputSchema: findCalleesInputShape,
+  outputSchema: navigationOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 

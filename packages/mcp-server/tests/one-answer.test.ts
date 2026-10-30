@@ -35,6 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHandler, resetDiscoveryForTests } from '../src/server.js';
 import { resetEnablementForTests, ENV_CONFIG_DIR, ENV_ENDPOINT, ENV_LICENSE, ENV_LICENSE_PUBKEY } from '../src/enablement.js';
 import { ENV_MODULES } from '../src/modules.js';
+import { ENV_ALLOWED_ROOTS } from '../src/roots.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
@@ -49,6 +50,9 @@ const moduleSpecifier = pathToFileURL(resolve(here, 'fixtures/one-answer/module.
 const SHARED_ENV: Record<string, string> = {
   [ENV_CONFIG_DIR]: '/nonexistent/cognium-one-answer',
   [ENV_MODULES]: moduleSpecifier,
+  // Both doors read only under the same allowed roots (issue #37): the
+  // fixtures directory, which holds both projects.
+  [ENV_ALLOWED_ROOTS]: resolve(here, 'fixtures'),
 };
 const CLEARED_ENV = [ENV_ENDPOINT, ENV_LICENSE, ENV_LICENSE_PUBKEY];
 

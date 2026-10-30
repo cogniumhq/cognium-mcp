@@ -45,10 +45,32 @@ C4 0.3.0.
 - Both carry `engine: { package: "circle-ir", version }`, because the engine's
   schemes do not name the version that computed them. The engine's answer is
   passed through unchanged; only the envelope and truncation are the server's.
+- **Every tool declares an `outputSchema` and returns `structuredContent` (#38)**:
+  the same object as the JSON text, built from one serialisation. Top-level
+  fields are the tool's envelope; nested engine objects stay open to new
+  fields. The SDK client validates the answer against the schema.
 - Sixteen built-in tools.
 
 ### Security
 
+- **Allowed roots (#37).** Every path argument of every tool, the built-in
+  ones and a module's, is now resolved with `realpath` and refused unless it
+  lies inside an allowed root, so neither `..`, an absolute path nor a symlink
+  can lead a tool out of the directories it was meant to read. Before this, a
+  token holder of a server mounted over HTTP could have any directory on the
+  host analysed, and findings quote string literals from the files read.
+  - `createHandler()` takes `allowedRoots`, else reads
+    `COGNIUM_MCP_ALLOWED_ROOTS`; **with neither it allows no directory.**
+    Hosts must now name their roots (circle-pack: its checkout directory).
+  - The stdio binary allows `COGNIUM_MCP_ALLOWED_ROOTS`, else **the working
+    directory**. A client that analysed projects outside the directory it
+    starts the server in must now list them in that variable.
+  - `buildServer()` takes `allowedRoots` and stays unconfined when given none
+    (an in-process caller owns its paths). `ToolContext.allowedRoots` tells a
+    module the roots, for paths it reads on its own.
+  - A path containing a NUL byte is refused everywhere.
+  - The `META-INF/services` walk behind `find_dead_code` / `removal_reach`
+    no longer follows symlinks.
 - **`@modelcontextprotocol/server` and `@modelcontextprotocol/core` move from
   2.2 to `^2.3.1`** (2.4.0 in the lockfile). 2.0–2.2 carried two
   high-severity advisories: a shared transport could deliver a message to the

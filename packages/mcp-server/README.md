@@ -62,6 +62,31 @@ Add to `~/.cursor/mcp.json`:
 
 The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cognium-dev) for Cursor (`mcp.json`) and Claude Code (`.mcp.json`). That plugin also ships skills, rules, commands, and a SAST reviewer agent.
 
+### Which directories the tools may read
+
+Every path a tool is given (`path`, `project_root`, `baseline_root`,
+`advisory_db`, and a module's own path arguments) must lie inside an
+**allowed root**. A path is judged by where it really is: it is resolved with
+`realpath`, so `..` and a symlink that leads out of a root are refused like
+any other path outside it. A refused call is a normal result with
+`isError: true` and one line saying so; the tool does not run.
+
+Over stdio the allowed root is **the directory the client starts the server
+in**. To allow others, list them in `COGNIUM_MCP_ALLOWED_ROOTS`, separated by
+`:` (`;` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "cognium": {
+      "command": "npx",
+      "args": ["-y", "@cognium/mcp-server"],
+      "env": { "COGNIUM_MCP_ALLOWED_ROOTS": "/home/me/src:/home/me/work" }
+    }
+  }
+}
+```
+
 ## Tools
 
 | Tool | Purpose |
@@ -238,10 +263,18 @@ out — builds a fresh server per request, and serves both protocol eras:
 ```ts
 import { createHandler } from '@cognium/mcp-server';
 
-const handler = createHandler();
+// Name the directories a caller may have analysed. Without this, every
+// path argument is refused: over HTTP the caller is not the machine's owner.
+const handler = createHandler({ allowedRoots: ['/srv/checkouts'] });
 // Hono, Workers, Deno, Bun: hand it the request.
 app.all('/mcp', (c) => handler.fetch(c.req.raw));
 ```
+
+**Allowed roots are required for HTTP hosting.** `createHandler()` reads
+`allowedRoots`, else `COGNIUM_MCP_ALLOWED_ROOTS`; with neither, no directory
+is readable and every path-taking tool answers with an error (the tools that
+take no path still work). Point the roots at the checkouts you mean to serve,
+never at `/` or a home directory: findings quote the source they come from.
 
 To inspect what the install loaded, or to connect a transport of your own:
 
@@ -255,7 +288,9 @@ await server.connect(myTransport); // serves the 2025-era protocol only
 ```
 
 `buildServer(options)` is the synchronous form: it registers exactly what you
-pass and resolves nothing.
+pass and resolves nothing. It is **unconfined by default**, because a caller
+in its own process already owns the paths it passes; give it `allowedRoots`
+whenever the arguments come from someone else.
 
 ## Optional tool modules
 
@@ -314,6 +349,10 @@ decides what is *listed*, and the terms carry the grant.
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
   deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
   writes no file, but it clears the server's in-memory cache.
+- **`structuredContent`.** Every tool declares an `outputSchema`, and every
+  successful answer carries `structuredContent`: the same object as the JSON
+  text, so a client can validate it. Nested engine objects are open to new
+  fields; the top-level fields are the tool's.
 - **Errors.** A malformed request gets a JSON-RPC error: `-32602` for bad
   parameters or a tool that does not exist, `-32601` for an unknown method. A
   well-formed call a tool cannot serve — an unknown sink type, a missing path —

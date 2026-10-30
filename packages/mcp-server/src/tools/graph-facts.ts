@@ -17,7 +17,7 @@
  */
 
 import { z } from 'zod';
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'path';
 import {
@@ -152,10 +152,12 @@ function serviceFiles(root: string): { path: string; text: string }[] {
       const abs = join(dir, name);
       let st;
       try {
-        st = statSync(abs);
+        // lstat: a symlink is not followed, so the walk cannot leave the tree.
+        st = lstatSync(abs);
       } catch {
         continue;
       }
+      if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) walk(abs);
       else if (/(^|[\\/])META-INF[\\/]services[\\/][^\\/]+$/.test(abs)) {
         out.push({ path: toRepoPath(root, abs), text: readFileSync(abs, 'utf8') });

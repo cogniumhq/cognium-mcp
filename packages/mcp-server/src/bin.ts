@@ -18,6 +18,7 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { buildServer, discoverModules } from './server.js';
 import { startupLines } from './startup.js';
+import { rootsFromEnv } from './roots.js';
 
 async function main(): Promise<void> {
   // Modules and the licence state are resolved once, before anything is
@@ -31,7 +32,11 @@ async function main(): Promise<void> {
   // with `initialize` is served exactly as before; one that speaks the
   // 2026-07-28 revision is served that. Either way it gets one server,
   // built here, for the life of the connection.
-  serveStdio(() => buildServer({ modules: discovery.modules, enablement: discovery.enablement }));
+  // Tools read only under the allowed roots (issue #37): the directories in
+  // COGNIUM_MCP_ALLOWED_ROOTS, else the working directory the client
+  // started the server in.
+  const allowedRoots = rootsFromEnv() ?? [process.cwd()];
+  serveStdio(() => buildServer({ modules: discovery.modules, enablement: discovery.enablement, allowedRoots }));
 }
 
 main().catch((err) => {

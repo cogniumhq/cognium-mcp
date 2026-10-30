@@ -13,6 +13,7 @@ import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, truncateString, MAX_FINDINGS } from '../util/serialize.js';
+import { findSimilarOutputShape } from './output-shapes.js';
 
 export const findSimilarInputShape = {
   project_root: z.string().describe('Absolute path to the project root.'),
@@ -31,6 +32,7 @@ export const findSimilarConfig = {
     'and/or taint sink type. Use after triaging a finding to catch the same vulnerability pattern ' +
     'elsewhere without re-scanning or re-prompting.',
   inputSchema: findSimilarInputShape,
+  outputSchema: findSimilarOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 

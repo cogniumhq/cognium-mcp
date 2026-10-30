@@ -7,6 +7,7 @@ import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, MAX_ENTRY_POINTS } from '../util/serialize.js';
+import { listEntryPointsOutputShape } from './output-shapes.js';
 
 export const listEntryPointsInputShape = {
   project_root: z.string().describe('Absolute path to the project root.'),
@@ -23,6 +24,7 @@ export const listEntryPointsConfig = {
     'call-graph edges that framework registration establishes but the raw AST does not surface. Answers ' +
     '"what is the attack surface of this codebase?"',
   inputSchema: listEntryPointsInputShape,
+  outputSchema: listEntryPointsOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 

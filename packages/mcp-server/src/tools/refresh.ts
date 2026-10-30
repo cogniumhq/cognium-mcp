@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, CACHE_RESET_ANNOTATIONS } from './types.js';
+import { refreshOutputShape } from './output-shapes.js';
 
 export const refreshInputShape = {
   project_root: z.string().optional()
@@ -21,6 +22,7 @@ export const refreshConfig = {
     '(when omitted). The next tool call that needs analysis will re-run `analyzeProject`. Use after a git ' +
     'checkout, dependency change, or when authoring / testing analyzer rules.',
   inputSchema: refreshInputShape,
+  outputSchema: refreshOutputShape,
   annotations: CACHE_RESET_ANNOTATIONS,
 } as const;
 

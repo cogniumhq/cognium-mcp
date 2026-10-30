@@ -7,6 +7,7 @@ import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
 import { truncateArray, truncateString, MAX_TAINT_PATHS } from '../util/serialize.js';
+import { taintPathsOutputShape } from './output-shapes.js';
 
 export const taintPathsInputShape = {
   project_root: z.string().describe('Absolute path to the project root.'),
@@ -25,6 +26,7 @@ export const taintPathsConfig = {
     'sink type. Use to enumerate every attacker-reachable data flow between files. Requires that `scan` ' +
     'has been called on the project root.',
   inputSchema: taintPathsInputShape,
+  outputSchema: taintPathsOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
