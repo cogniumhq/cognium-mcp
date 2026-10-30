@@ -74,11 +74,13 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `attack_surface_summary` | Roll-up: entry points × sinks × cross-file taint paths + top files by finding count. |
 | `check_sanitizer` | Deterministic yes/no on whether a function is a recognized sanitizer for a sink category. |
 | `describe_sink` | CWE, remediation, CVSS-like severity, and sanitizer list for a sink category. |
-| `describe_source` | Every framework API pattern circle-ir treats as a source of a given category. |
+| `describe_source` | Every framework API pattern the engine treats as a source of a given category. |
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
 | `analyze_dependencies` | Known advisories in a Java project's resolved dependencies (Maven, Gradle), matched against an OSV advisory snapshot you supply; with `baseline_root`, what a change removed and added. See below. |
+| `find_dead_code` | For each declaration of a TypeScript / JavaScript, Java, Python or Go project: **live** (reachable from an entry point), **may be live** (only through an uncertain call, a value reference or a file that did not parse; the reason is listed) or **dead**. Each answer says whether a test still reaches it; code reached only by tests is reported as dead, with the test named. A fact, never a removal decision. |
+| `removal_reach` | For a change between two checked-out trees (`baseline_root` = before, `project_root` = after): everything removed that was still reachable before the change, with the path that reached it. Code that only moved or was renamed is listed apart, not as removed. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ### `analyze_dependencies`
@@ -108,15 +110,30 @@ With `baseline_root` (the same project at an earlier commit), the answer adds
 versions seen on both sides, and the dependency drift — and the baseline's
 `resolution`, both under the one snapshot.
 
+### `find_dead_code` and `removal_reach`
+
+Both answer from the same call graph and entry points, which the engine builds
+per language (TypeScript and JavaScript together, Java, Python, Go). Pass
+`language` when a tree holds more than one; otherwise the one present is used.
+Both include the engine version, so an answer can be reproduced.
+
+Before deleting code:
+
+1. `find_dead_code` on the project root. Act only on **dead** answers that no
+   test reaches.
+2. Make the change.
+3. `removal_reach` with the project before the change as `baseline_root`. An
+   empty list means nothing reachable was removed.
+
 ## Resources
 
 | URI | Content |
 | --- | ------- |
 | `cognium://sast-finding-schema` | JSON Schema for `SastFinding` |
-| `cognium://sink-catalog` | Every taint sink pattern known to circle-ir |
+| `cognium://sink-catalog` | Every taint sink pattern the engine knows |
 | `cognium://source-catalog` | Every taint source pattern |
 | `cognium://sanitizer-catalog` | Every sanitizer entry, indexed by sink type |
-| `cognium://passes` | Contents of circle-ir `docs/PASSES.md` — canonical pass registry |
+| `cognium://passes` | The engine's pass registry: every analysis pass, with its rule id and CWE |
 
 ## Suggested tool-call flow
 

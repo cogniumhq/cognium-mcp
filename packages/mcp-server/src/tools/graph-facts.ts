@@ -2,8 +2,10 @@
  * `find_dead_code` and `removal_reach` — the engine's graph facts over stable
  * ids (C4 0.3.0 §11; `dead-code@0.1` and `removal-reach@0.1`).
  *
- * Both read a TypeScript / JavaScript or a Java tree, build the engine's call
- * graph with its entry-point index (`buildTsCallGraph` or `buildJavaGraph`), and pass the engine's answer through **unchanged**:
+ * Both read a TypeScript / JavaScript, Java, Python or Go tree, build the
+ * engine's call graph with its entry-point index (`buildTsCallGraph`,
+ * `buildJavaGraph`, `buildPythonGraph` or `buildGoGraph`), and pass the
+ * engine's answer through **unchanged**:
  * the server only adds its envelope (`projectRoot`, `baselineRoot`, `engine`,
  * truncation and `provenance`). The verdicts are the engine's facts, never a
  * decision: `dead` means no path from a product entry, no weak path, no
@@ -19,7 +21,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'path';
 import {
+  buildGoGraph,
   buildJavaGraph,
+  buildPythonGraph,
   buildTsCallGraph,
   deadCode,
   deriveStableIds,
@@ -98,6 +102,40 @@ function javaSources(root: string): { path: string; code: string }[] {
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
+/** The tree's files of one language, repository-relative, in path order. */
+function sourcesOf(root: string, language: 'python' | 'go'): { path: string; code: string }[] {
+  return collectFiles(root, { language })
+    .map(f => ({ path: toRepoPath(root, f.filePath), code: f.code }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** Console scripts from `[project.scripts]` in a root `pyproject.toml`, as `pkg.mod:func`. */
+function consoleScripts(root: string): string[] {
+  const file = join(root, 'pyproject.toml');
+  if (!existsSync(file)) return [];
+  const out: string[] = [];
+  let inScripts = false;
+  for (const raw of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith('[')) {
+      inScripts = line === '[project.scripts]';
+      continue;
+    }
+    if (!inScripts) continue;
+    const m = /^[A-Za-z0-9_.-]+\s*=\s*["']([A-Za-z0-9_.]+:[A-Za-z0-9_.]+)["']/.exec(line);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+/** The module path from a root `go.mod` (`module example.com/app`), if any. */
+function goModulePath(root: string): string | undefined {
+  const file = join(root, 'go.mod');
+  if (!existsSync(file)) return undefined;
+  const m = /^\s*module\s+(\S+)/m.exec(readFileSync(file, 'utf8'));
+  return m ? m[1].replace(/^"|"$/g, '') : undefined;
+}
+
 /** `META-INF/services/<interface>` files: each class they list is a `reflection` entry. */
 function serviceFiles(root: string): { path: string; text: string }[] {
   const skipped = new Set(SKIPPED_DIRECTORIES);
@@ -129,30 +167,50 @@ function serviceFiles(root: string): { path: string; text: string }[] {
 }
 
 /** Which graph a tree gets. `typescript` covers JavaScript too. */
-export type GraphLanguage = 'typescript' | 'java';
+export type GraphLanguage = 'typescript' | 'java' | 'python' | 'go';
+
+/** The `language` input: the four graphs, with `javascript` as another name for `typescript`. */
+export type LanguageInput = 'typescript' | 'javascript' | 'java' | 'python' | 'go';
+
+const FAMILY_NAMES: Record<GraphLanguage, string> = {
+  typescript: 'TypeScript/JavaScript',
+  java: 'Java',
+  python: 'Python',
+  go: 'Go',
+};
 
 /**
  * The tree's language family: the one asked for, else the only one present.
- * A tree with both Java and TypeScript/JavaScript files must say which; an
- * answer over half a project would read as complete.
+ * A tree with more than one family must say which; an answer over part of a
+ * project would read as complete.
  */
-function graphLanguage(roots: readonly string[], asked?: 'typescript' | 'javascript' | 'java'): GraphLanguage | string {
-  if (asked) return asked === 'java' ? 'java' : 'typescript';
-  let java = false;
-  let ts = false;
+function graphLanguage(roots: readonly string[], asked?: LanguageInput): { language: GraphLanguage } | { error: string } {
+  if (asked) return { language: asked === 'javascript' ? 'typescript' : asked };
+  const present = new Set<GraphLanguage>();
   for (const r of roots) {
-    java ||= collectFiles(r, { language: 'java', maxFiles: 1 }).length > 0;
-    ts ||= collectFiles(r, { language: 'typescript', maxFiles: 1 }).length > 0
-      || collectFiles(r, { language: 'javascript', maxFiles: 1 }).length > 0;
+    const has = (l: 'typescript' | 'javascript' | 'java' | 'python' | 'go') =>
+      collectFiles(r, { language: l, maxFiles: 1 }).length > 0;
+    if (has('java')) present.add('java');
+    if (has('typescript') || has('javascript')) present.add('typescript');
+    if (has('python')) present.add('python');
+    if (has('go')) present.add('go');
   }
-  if (java && ts) return 'the tree has both Java and TypeScript/JavaScript files: pass `language`';
-  if (!java && !ts) return 'no Java, TypeScript or JavaScript files under the root';
-  return java ? 'java' : 'typescript';
+  const found = (['java', 'typescript', 'python', 'go'] as const).filter(l => present.has(l));
+  if (found.length > 1) {
+    return { error: `the tree has ${found.map(l => FAMILY_NAMES[l]).join(', ')} files: pass \`language\`` };
+  }
+  if (found.length === 0) return { error: 'no Java, TypeScript, JavaScript, Python or Go files under the root' };
+  return { language: found[0] };
 }
 
 /** The engine's reach input for one tree: its call graph with the entry index. */
 async function buildGraph(root: string, language: GraphLanguage): Promise<ReachInput> {
   if (language === 'java') return buildJavaGraph(javaSources(root), { serviceFiles: serviceFiles(root) });
+  if (language === 'python') return buildPythonGraph(sourcesOf(root, 'python'), { consoleScripts: consoleScripts(root) });
+  if (language === 'go') {
+    const modulePath = goModulePath(root);
+    return buildGoGraph(sourcesOf(root, 'go'), modulePath ? { modulePath } : {});
+  }
   const sources = tsSources(root);
   return buildTsCallGraph(sources, { packages: manifests(root, sources) });
 }
@@ -178,18 +236,18 @@ const limitShape = z
   .describe(`Most items returned (default ${DEFAULT_GRAPH_FACT_LIMIT}, max ${MAX_GRAPH_FACT_LIMIT}). A cut list says so.`);
 
 const languageShape = z
-  .enum(['typescript', 'javascript', 'java'])
+  .enum(['typescript', 'javascript', 'java', 'python', 'go'])
   .optional()
   .describe(
-    'Which graph to build: `java`, or `typescript` / `javascript` (one graph for both). ' +
-      'Default: the only family present; a tree with both must say.',
+    'Which graph to build: `java`, `python`, `go`, or `typescript` / `javascript` (one graph for both). ' +
+      'Default: the only family present; a tree with more than one must say.',
   );
 
 // ---------------------------------------------------------------------------
 // find_dead_code
 
 export const findDeadCodeInputShape = {
-  project_root: z.string().describe('Absolute path to the project root (Java, or TypeScript / JavaScript).'),
+  project_root: z.string().describe('Absolute path to the project root (Java, Python, Go, or TypeScript / JavaScript).'),
   language: languageShape,
   root_kinds: rootKindsShape,
   verdicts: z
@@ -219,7 +277,7 @@ export const findDeadCodeOutputShape = {
 export const findDeadCodeConfig = {
   title: 'Find dead code',
   description:
-    'Per declaration of a Java or TypeScript / JavaScript project, whether a product entry point reaches it ' +
+    'Per declaration of a Java, Python, Go or TypeScript / JavaScript project, whether a product entry point reaches it ' +
     '(`dead-code@0.1`): `live` (a strong path), `may-be-live` (only a weak path, an unresolved site that ' +
     'could reach it, or a file that did not parse), or `dead`. Each fact carries the shortest strong and ' +
     'weak path, the unresolved sites, and `reachedByTest` with the first test that reaches it. Test files ' +
@@ -232,7 +290,7 @@ export const findDeadCodeConfig = {
 export function makeFindDeadCodeHandler() {
   return async (args: {
     project_root: string;
-    language?: 'typescript' | 'javascript' | 'java';
+    language?: LanguageInput;
     root_kinds?: EntryKind[];
     verdicts?: DeadCodeFact['verdict'][];
     limit?: number;
@@ -241,9 +299,9 @@ export function makeFindDeadCodeHandler() {
     if (bad) return errorResult(bad);
     await ensureAnalyzer();
     const root = resolve(args.project_root);
-    const language = graphLanguage([root], args.language);
-    if (language !== 'java' && language !== 'typescript') return errorResult(language);
-    const graph = await buildGraph(root, language);
+    const picked = graphLanguage([root], args.language);
+    if ('error' in picked) return errorResult(picked.error);
+    const graph = await buildGraph(root, picked.language);
     const result = deadCode(graph, args.root_kinds ? { rootKinds: args.root_kinds } : {});
     const wanted = args.verdicts ? new Set(args.verdicts) : null;
     const facts = wanted ? result.facts.filter(f => wanted.has(f.verdict)) : result.facts;
@@ -295,7 +353,7 @@ export const removalReachOutputShape = {
 export const removalReachConfig = {
   title: 'Removal reach',
   description:
-    'For a change between two checked-out trees of a Java or TypeScript / JavaScript project, every declaration ' +
+    'For a change between two checked-out trees of a Java, Python, Go or TypeScript / JavaScript project, every declaration ' +
     'that disappeared (moves and renames are listed apart in `moved[]`), with what reached it at the base ' +
     '(`removal-reach@0.1`): the shortest strong path from a product entry, the shortest weak path, the ' +
     'unresolved sites that could reach it, and move candidates that might explain it. `partial[]` lists files ' +
@@ -307,6 +365,11 @@ export const removalReachConfig = {
 
 async function headIds(root: string, language: GraphLanguage): Promise<StableIdFile[]> {
   if (language === 'java') return (await buildJavaGraph(javaSources(root))).files;
+  if (language === 'python') return (await buildPythonGraph(sourcesOf(root, 'python'))).files;
+  if (language === 'go') {
+    const modulePath = goModulePath(root);
+    return (await buildGoGraph(sourcesOf(root, 'go'), modulePath ? { modulePath } : {})).files;
+  }
   const sources = tsSources(root);
   const out: StableIdFile[] = [];
   for (const s of sources) {
@@ -320,7 +383,7 @@ export function makeRemovalReachHandler() {
   return async (args: {
     project_root: string;
     baseline_root: string;
-    language?: 'typescript' | 'javascript' | 'java';
+    language?: LanguageInput;
     root_kinds?: EntryKind[];
     limit?: number;
   }): Promise<ToolResult> => {
@@ -329,10 +392,10 @@ export function makeRemovalReachHandler() {
     await ensureAnalyzer();
     const head = resolve(args.project_root);
     const base = resolve(args.baseline_root);
-    const language = graphLanguage([base, head], args.language);
-    if (language !== 'java' && language !== 'typescript') return errorResult(language);
-    const baseGraph = await buildGraph(base, language);
-    const headFiles = await headIds(head, language);
+    const picked = graphLanguage([base, head], args.language);
+    if ('error' in picked) return errorResult(picked.error);
+    const baseGraph = await buildGraph(base, picked.language);
+    const headFiles = await headIds(head, picked.language);
     const result = removalReach(baseGraph, headFiles, args.root_kinds ? { rootKinds: args.root_kinds } : {});
     const limit = args.limit ?? DEFAULT_GRAPH_FACT_LIMIT;
     const payload = {

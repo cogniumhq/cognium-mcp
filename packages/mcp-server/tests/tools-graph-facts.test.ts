@@ -111,3 +111,33 @@ describe('Java projects (buildJavaGraph)', () => {
     expect((t.facts as any[]).every(f => !f.file.endsWith('.java'))).toBe(true);
   });
 });
+
+describe.each([
+  { language: 'python' as const, dir: 'graph-facts-python', entry: 'main', live: 'fmt', dead: 'never_called' },
+  { language: 'go' as const, dir: 'graph-facts-go', entry: 'main', live: 'Format', dead: 'neverCalled' },
+])('$language projects', ({ language, dir, entry, live, dead }) => {
+  const lbase = resolve(__dirname, 'fixtures', dir, 'base');
+  const lhead = resolve(__dirname, 'fixtures', dir, 'head');
+  const named = (facts: any[], n: string) => facts.find(f => String(f.qualified_name).split(/[.:#/ ]/).includes(n));
+
+  it('find_dead_code answers in the same shape, detecting the language', async () => {
+    const out = parse(await makeFindDeadCodeHandler()({ project_root: lbase }));
+    const ts = parse(await makeFindDeadCodeHandler()({ project_root: base }));
+    expect(Object.keys(out)).toEqual(Object.keys(ts));
+    expect(out.scheme).toBe('dead-code@0.1');
+    expect(named(out.facts, entry)?.verdict).toBe('live');
+    expect(named(out.facts, live)?.verdict).toBe('live');
+    expect(named(out.facts, dead)?.verdict).toBe('dead');
+    const asked = parse(await makeFindDeadCodeHandler()({ project_root: lbase, language }));
+    expect(asked.facts).toEqual(out.facts);
+  });
+
+  it('removal_reach answers a pin pair in the same shape', async () => {
+    const out = parse(await makeRemovalReachHandler()({ project_root: lhead, baseline_root: lbase }));
+    const ts = parse(await makeRemovalReachHandler()({ project_root: head, baseline_root: base }));
+    expect(Object.keys(out)).toEqual(Object.keys(ts));
+    expect(out.scheme).toBe('removal-reach@0.1');
+    expect(named(out.removed, dead)).toBeDefined();
+    expect(named(out.removed, live)).toBeUndefined();
+  });
+});

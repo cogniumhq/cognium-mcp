@@ -34,15 +34,30 @@ C4 0.3.0.
   `baseline_root` = base), every removed declaration with what reached it at
   the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
   `partial[]` for files that did not parse. Declares an `outputSchema`.
-- Both take **Java** projects too, through `circle-ir`'s `buildJavaGraph`
-  (`META-INF/services` files feed the entry index), in the same output shape.
-  A new optional `language` (`java` · `typescript` · `javascript`) picks the
-  graph; by default the only family present is used, and a tree holding both
-  Java and TypeScript/JavaScript is asked to say which.
+- Both take **Java**, **Python** and **Go** projects too, in the same output
+  shape: Java through `circle-ir`'s `buildJavaGraph` (`META-INF/services`
+  files feed the entry index), Python through `buildPythonGraph` (console
+  scripts from a root `pyproject.toml`'s `[project.scripts]` are `main`
+  entries), Go through `buildGoGraph` (the module path from a root `go.mod`).
+  A new optional `language` (`java` · `python` · `go` · `typescript` ·
+  `javascript`) picks the graph; by default the only family present is used,
+  and a tree holding more than one is asked to say which.
 - Both carry `engine: { package: "circle-ir", version }`, because the engine's
   schemes do not name the version that computed them. The engine's answer is
   passed through unchanged; only the envelope and truncation are the server's.
 - Sixteen built-in tools.
+
+### Security
+
+- **`@modelcontextprotocol/server` and `@modelcontextprotocol/core` move from
+  2.2 to `^2.3.1`** (2.4.0 in the lockfile). 2.0–2.2 carried two
+  high-severity advisories: a shared transport could deliver a message to the
+  wrong client, and a crafted request could exhaust memory. The client
+  (a dev dependency) moves to `^2.3.1` as well. Note: from 2.4.0 these
+  packages are licensed Apache-2.0 (previously MIT).
+- **`zod` moves to `^4.6.6`** (4.6.7 in the lockfile); versions before 4.6.6
+  carry a high-severity advisory.
+- `npm audit --omit=dev` reports no vulnerabilities.
 
 ## [0.7.0] - 2026-10-17
 
