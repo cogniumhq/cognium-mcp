@@ -34,6 +34,8 @@ const FLOOR_TOOLS = [
   'find_similar',
   'find_callers',
   'find_callees',
+  'find_dead_code',
+  'removal_reach',
   'refresh',
 ];
 
