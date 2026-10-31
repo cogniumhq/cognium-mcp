@@ -4,6 +4,25 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Needs `circle-ir` **4.18.0** (not yet published: it carries the advisory
+matcher, Maven version order and declared-version reader this tool is built
+on). A `circle-ir` minor, so the release train applies: `circle-ir` 4.18.0,
+then `circle-ir-ai` on 4.18, then this package.
+
+### Added
+
+- **`analyze_dependencies`**, a new built-in tool (deterministic, offline,
+  read-only, closed-world, with an `outputSchema`). Resolves a Java project's
+  manifests (Maven, Gradle) to their dependency sets — from a Gradle lockfile
+  or Maven `dependency:tree` / `dependency:list` output when present, else the
+  build file — and matches them against an OSV advisory snapshot the caller
+  supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
+  `baseline_root`, adds the advisories a change removed, added and left, and
+  the dependency drift. The snapshot is indexed once per content (digest) per
+  process. Fourteen built-in tools.
+
 ## [0.7.0] - 2026-10-17
 
 Tested against `circle-ir` **4.16.1**. The optional module to pair it with is

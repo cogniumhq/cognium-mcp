@@ -1,0 +1,2 @@
+com.example:lib:jar:1.0
+\- org.yaml:snakeyaml:jar:1.33:compile

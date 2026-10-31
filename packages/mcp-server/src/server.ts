@@ -31,6 +31,8 @@ import { attackSurfaceSummaryConfig, makeAttackSurfaceSummaryHandler } from './t
 import { listReachableSinksConfig, makeListReachableSinksHandler } from './tools/list-reachable-sinks.js';
 import { findSimilarConfig, makeFindSimilarHandler } from './tools/find-similar.js';
 import { refreshConfig, makeRefreshHandler } from './tools/refresh.js';
+import { analyzeDependenciesConfig, makeAnalyzeDependenciesHandler } from './tools/analyze-dependencies.js';
+import { SnapshotCache } from './deps/snapshot.js';
 import {
   findCallersConfig,
   makeFindCallersHandler,
@@ -39,6 +41,13 @@ import {
 } from './tools/navigation.js';
 
 const require_ = createRequire(import.meta.url);
+
+/**
+ * Advisory snapshots indexed by this process. Shared by every server it
+ * builds (the HTTP host builds one per request): an index is the size of the
+ * export it came from and does not change while its files do not.
+ */
+const SNAPSHOTS = new SnapshotCache(2);
 
 /**
  * Server name and version, from the manifest, in one place.
@@ -99,6 +108,7 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   server.registerTool('find_similar', findSimilarConfig, makeFindSimilarHandler(ctx) as never);
   server.registerTool('find_callers', findCallersConfig, makeFindCallersHandler(ctx) as never);
   server.registerTool('find_callees', findCalleesConfig, makeFindCalleesHandler(ctx) as never);
+  server.registerTool('analyze_dependencies', analyzeDependenciesConfig, makeAnalyzeDependenciesHandler(SNAPSHOTS) as never);
   server.registerTool('refresh', refreshConfig, makeRefreshHandler(ctx) as never);
 
   registerResources(server);
