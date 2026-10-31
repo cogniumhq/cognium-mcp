@@ -220,6 +220,72 @@ describe('dependency_calls — the envelope over a stand-in code-facts', () => {
     }
   });
 
+  it('passes the engine result through, finds the jar in the repository, and cuts at limit', async () => {
+    const at = (line: number) => ({ file: 'A.java', line, col: 1 });
+    const seen: Array<Record<string, unknown>> = [];
+    const run: CodeFacts['runDependencyCalls'] = async (root, views, params) => {
+      seen.push(params);
+      const r = await empty(root, views, params);
+      const site = r.anchors[0].observation as Record<string, any>;
+      const calls = [1, 2, 3].map((line) => ({
+        anchor: `call:A.java:${line}:1`, inputDigest: 'sha256:z',
+        observation: { state: 'uncovered', call: { from: 'a', site: at(line), methodName: 'load', receiver: 'org.yaml.snakeyaml.Yaml', tests: [] } },
+      }));
+      return { ...r, anchors: [...calls, { ...r.anchors[0], observation: {
+        ...site, packageSource: 'jar', jarDigest: 'sha256:j', covered: false,
+        counts: { calls: 3, covered: 0, uncovered: 3, unattributed: 2 },
+        unattributed: [{ from: 'a', site: at(9), methodName: 'load' }, { from: 'a', site: at(10), methodName: 'x' }],
+      } }] };
+    };
+    const repoJar = join(tmp, 'jars', 'snakeyaml.jar');
+    const facts: CodeFactsLoader = async () => ({
+      version: '0.1.0', schemaVersion: '0.1', engineVersion: '0.0.0', mavenJarPath: () => repoJar, runDependencyCalls: run,
+    });
+    const r = (await makeDependencyCallsHandler(ctx(), facts)({
+      project_root: tmp, artifact: 'org.yaml:snakeyaml:2.2', maven_repo_dir: tmp, limit: 2,
+    })) as Result;
+    const b = body(r);
+    expect(seen[0]).toEqual({ artifact: 'org.yaml:snakeyaml:2.2', language: 'java', jarPath: repoJar });
+    expect(b).toMatchObject({
+      jar: repoJar, jarDigest: 'sha256:j', packageSource: 'jar', totalCalls: 3, truncated: true,
+      uncovered: 3, unattributed: 2, covered: false, engine: { package: 'circle-ir', version: '0.0.0' },
+    });
+    expect(b.calls.map((c: any) => c.site.line)).toEqual([1, 2]);
+    expect(b.unattributedSites).toHaveLength(2);
+    expect(r.structuredContent).toEqual(b);
+  });
+
+  it('turns UnknownArtifact into one line, and names a skipped repository', async () => {
+    const unknown: CodeFacts['runDependencyCalls'] = async (_root, _views, params) => {
+      const e = new Error(`${params.artifact}: no jar and no fallback row`);
+      e.name = 'UnknownArtifact';
+      throw e;
+    };
+    const previous = process.env.MAVEN_REPO_LOCAL;
+    process.env.MAVEN_REPO_LOCAL = join(tmp, 'jars');
+    try {
+      const r = (await makeDependencyCallsHandler(ctx([join(tmp, 'subject')]), standIn(unknown))({
+        project_root: join(tmp, 'subject'), artifact: 'org.example:nothing:1.0',
+      })) as Result;
+      expect(r.isError).toBe(true);
+      // The version is dropped, so code-facts reads no repository of its own.
+      expect(r.content[0].text).toMatch(/^Error: org\.example:nothing: no jar .*pass `jar_path`.*outside the allowed roots and was not read/);
+    } finally {
+      if (previous === undefined) delete process.env.MAVEN_REPO_LOCAL;
+      else process.env.MAVEN_REPO_LOCAL = previous;
+    }
+  });
+
+  it('refuses paths outside the allowed roots', async () => {
+    const handler = makeDependencyCallsHandler(ctx([join(tmp, 'subject')]), standIn(empty));
+    const r = (await handler({ project_root: join(tmp, 'jars'), artifact: 'g:a' })) as Result;
+    expect(r.content[0].text).toMatch(/project_root` is outside the allowed roots/);
+    const j = (await handler({ project_root: join(tmp, 'subject'), artifact: 'g:a', jar_path: join(tmp, 'jars', 'snakeyaml.jar') })) as Result;
+    expect(j.content[0].text).toMatch(/jar_path` is outside the allowed roots/);
+    const ok = (await handler({ project_root: join(tmp, 'subject'), artifact: 'g:a', maven_repo_dir: join(tmp, 'subject') })) as Result;
+    expect(ok.isError).toBeFalsy();
+  });
+
   it('refuses an answer of another capability or without a site anchor, and lets other faults through', async () => {
     const other = await call({ project_root: tmp, artifact: 'g:a' }, async (...a) => ({ ...(await empty(...a)), capability: 'remedy-class' }));
     expect(other.content[0].text).toMatch(/answered remedy-class@0\.1, not dependency-calls@0\.1/);
