@@ -4,6 +4,31 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Needs `circle-ir` **4.18.0** (not yet published; built and tested against a
+linked build of cognium-dev `main`). Contract: C4 0.3.0.
+
+### Added
+
+- **`find_dead_code`** — per declaration of a TypeScript / JavaScript project,
+  the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or
+  `dead`, the shortest strong and weak paths from a product entry, unresolved
+  sites, and `reachedByTest`. Inputs `project_root`, `root_kinds[]`,
+  `verdicts[]`, `limit`. Declares an `outputSchema`; read-only, local.
+- **`removal_reach`** — for two checked-out trees (`project_root` = head,
+  `baseline_root` = base), every removed declaration with what reached it at
+  the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
+  `partial[]` for files that did not parse. Declares an `outputSchema`.
+- Both take **Java** projects too, through `circle-ir`'s `buildJavaGraph`
+  (`META-INF/services` files feed the entry index), in the same output shape.
+  A new optional `language` (`java` · `typescript` · `javascript`) picks the
+  graph; by default the only family present is used, and a tree holding both
+  Java and TypeScript/JavaScript is asked to say which.
+- Both carry `engine: { package: "circle-ir", version }`, because the engine's
+  schemes do not name the version that computed them. The engine's answer is
+  passed through unchanged; only the envelope and truncation are the server's.
+
 ## [0.7.0] - 2026-10-17
 
 Tested against `circle-ir` **4.16.1**. The optional module to pair it with is
