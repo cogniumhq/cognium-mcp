@@ -15,6 +15,13 @@ export interface ToolContext {
    * needed for. The floor tools never consult it.
    */
   enablement: Enablement;
+  /**
+   * Directories a path argument must lie inside, when the host names them.
+   * Absent means unconfined: the caller owns its paths, as an in-process
+   * caller of `buildServer()` does. Read by `dependency_calls` (C4 0.5.0),
+   * which also reads a Maven repository outside the project.
+   */
+  allowedRoots?: readonly string[];
 }
 
 /**
