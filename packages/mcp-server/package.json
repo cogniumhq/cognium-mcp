@@ -64,7 +64,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@modelcontextprotocol/core": "^2.2.0",
+    "@modelcontextprotocol/core": "^2.3.1",
     "@modelcontextprotocol/server": "^2.2.0",
     "circle-ir": "4.16.1",
     "yaml": "^2.9.1",
@@ -83,7 +83,7 @@
     }
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.2.0",
+    "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^26.6.2",
     "@vitest/coverage-v8": "^5.0.2",
     "typescript": "^7.0.2",
