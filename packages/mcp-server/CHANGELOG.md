@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-31
+
+Tested against `circle-ir` **4.16.1** (unchanged). The optional module to pair
+it with is still `circle-ir-ai` **4.29.0**, built on `4.16.1`. A minor because
+one tool is added; no tool was removed or renamed and no input schema changed.
+
+`@cognium/code-facts` stays an **optional peer** in this release. Its 0.1.0
+depends on `circle-ir` `>=4.18.0`, so as an exact dependency it would install a
+second `circle-ir` beside the pinned 4.16.1. It becomes an exact dependency in
+the release that moves the pin to 4.18, once a `circle-ir-ai` built on 4.18 is
+published (the release train requires it).
+
 ### Added
 
 - **`dependency_calls`** (C4 0.5.0 §11, §11c; E02): for a Maven dependency
@@ -15,12 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`groupId:artifactId[:version]`), `language` (`java`), `jar_path`,
   `maven_repo_dir`, `limit`; declares an `outputSchema` and returns
   `structuredContent`. Read-only and local. Computed by
-  `@cognium/code-facts` `runDependencyCalls`, an **optional peer** until it is
-  published (the tool answers one line while it is missing); it becomes an
-  exact dependency in the release that ships the tool, after `circle-ir` and
-  `@cognium/code-facts` are published.
+  `@cognium/code-facts` `runDependencyCalls` (0.1.0 or later), an **optional
+  peer**: install it beside this package to use the tool, which answers one
+  line while it is missing.
 - `buildServer({ allowedRoots })`: directories a path argument must lie in,
   read by `dependency_calls` (absent: unconfined, as before).
+
+### Security
+
+- Production dependency audit (#40): `@modelcontextprotocol/server` 2.4.0 and
+  `zod` 4.6.7.
 
 ## [0.7.0] - 2026-10-17
 
