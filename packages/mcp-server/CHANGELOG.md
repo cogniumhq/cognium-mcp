@@ -4,6 +4,24 @@ All notable changes to `@cognium/mcp-server` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`dependency_calls`** (C4 0.5.0 §11, §11c; E02): for a Maven dependency
+  bump, every call site that lands on the artifact, the tests that reach each
+  one, and the sites that cannot be ruled in or out, in the shape of
+  `cognium-dev depcalls -f json`. Inputs `project_root`, `artifact`
+  (`groupId:artifactId[:version]`), `language` (`java`), `jar_path`,
+  `maven_repo_dir`, `limit`; declares an `outputSchema` and returns
+  `structuredContent`. Read-only and local. Computed by
+  `@cognium/code-facts` `runDependencyCalls`, an **optional peer** until it is
+  published (the tool answers one line while it is missing); it becomes an
+  exact dependency in the release that ships the tool, after `circle-ir` and
+  `@cognium/code-facts` are published.
+- `buildServer({ allowedRoots })`: directories a path argument must lie in,
+  read by `dependency_calls` (absent: unconfined, as before).
+
 ## [0.7.0] - 2026-10-17
 
 Tested against `circle-ir` **4.16.1**. The optional module to pair it with is

@@ -78,6 +78,7 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
+| `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Needs `@cognium/code-facts` (not published yet). |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ## Resources
@@ -112,6 +113,27 @@ the plugin's **Suggest find_callers after reading Java** option in `/config`, or
 `COGNIUM_SUGGEST_FIND_CALLERS=off` outside the plugin. It is a plugin feature and
 changes nothing about the server: the tools, their schemas and their answers are
 the same with it and without it.
+
+## Calls into a dependency
+
+`dependency_calls` takes `project_root` (the tree after the bump) and
+`artifact` (`groupId:artifactId[:version]`). The artifact's packages come from
+`jar_path`, else the jar in the local Maven repository (`maven_repo_dir`,
+`$MAVEN_REPO_LOCAL` or `~/.m2/repository`) for a versioned coordinate, else a
+built-in table of common artifacts; `packageSource` says which, and an
+artifact none resolves is refused rather than answered as "0 calls". The
+answer is the object `cognium-dev depcalls -f json` prints: `calls[]` with the
+tests reaching each (covered when `tests[0].class` is `strong`), `covered`,
+`uncovered`, `unattributedSites[]` and `partial[]`, plus `engine`, `facts`,
+`counts` and truncation. The contract is C4 0.5.0 §11c.
+
+It is computed by `@cognium/code-facts`, which is not on npm yet (it needs a
+`circle-ir` release carrying `dependencyCalls`). Until then it is an optional
+peer: install it beside the server from a cognium-dev build, or the tool
+answers with one line saying it is missing. For development, extract the
+packed `@cognium/code-facts` into `node_modules/@cognium/code-facts` and the
+packed `circle-ir` it was built on into its own `node_modules/circle-ir`, so
+the server's `circle-ir` stays the pinned one.
 
 ## Reading a navigation answer
 
