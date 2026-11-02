@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Every tool declares an `outputSchema` and returns `structuredContent`**
+  (#38). `dependency_calls` already did; the other thirteen now do too
+  (`src/tools/output-shapes.ts`). `textResult` builds `structuredContent` by
+  parsing the JSON text it just wrote, so the two are the same object and a
+  field left `undefined` is absent from both. The schemas pin each tool's
+  top-level envelope and leave nested engine objects open. Error results are
+  unchanged: text only, `isError: true`.
+
+  **The publish gate counts this as a major.** `verify-install.mjs` compares
+  `outputSchema` like `inputSchema`, and 0.8.1 declares none for these
+  thirteen tools, so each reports "has a different outputSchema". Releasing
+  this needs either 1.0.0 or a deliberate change to the gate that treats an
+  `outputSchema` appearing where there was none as an addition.
+
 ## [0.8.1] - 2026-11-01
 
 Tested against `circle-ir` **4.18.1** (was 4.16.1). The optional module to pair

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, READ_ONLY_ANNOTATIONS } from './types.js';
+import { listReachableSinksOutputShape } from './output-shapes.js';
 import { truncateArray, truncateString, MAX_FINDINGS } from '../util/serialize.js';
 
 export const listReachableSinksInputShape = {
@@ -32,6 +33,7 @@ export const listReachableSinksConfig = {
     '"list all method calls named `Runtime.exec`". Use before proposing fixes so the LLM only inspects ' +
     'sinks that are truly reachable from attacker-controlled input.',
   inputSchema: listReachableSinksInputShape,
+  outputSchema: listReachableSinksOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 

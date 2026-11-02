@@ -67,12 +67,20 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * A tool's answer as both JSON text and `structuredContent`. An object
+ * payload's structured copy is parsed back from the text, so the two are the
+ * same object (an `undefined` field is absent from both) and every tool that
+ * declares an `outputSchema` returns what it validates (issue #38). A string
+ * payload has no structured copy.
+ */
 export function textResult(payload: object | string, structured?: Record<string, unknown>): ToolResult {
   // `provenance` goes last, so the fields a reader came for stay first.
   const text =
     typeof payload === 'string' ? payload : JSON.stringify({ ...payload, provenance: DETERMINISTIC }, null, 2);
   const result: ToolResult = { content: [{ type: 'text', text }] };
   if (structured) result.structuredContent = structured;
+  else if (typeof payload !== 'string') result.structuredContent = JSON.parse(text) as Record<string, unknown>;
   return result;
 }
 

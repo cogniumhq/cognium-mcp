@@ -284,6 +284,12 @@ decides what is *listed*, and the terms carry the grant.
 - **`provenance`** is the last field of every successful response:
   `"deterministic"` for all fourteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
+- **`outputSchema` and `structuredContent`.** Every built-in tool declares an
+  `outputSchema` in `tools/list`, and every successful response carries
+  `structuredContent`: the same object as the JSON in `content[0].text`. The
+  schema pins the top-level envelope; nested engine objects are open, so the
+  engine may add a field inside them in a minor. An `isError` result carries
+  text only.
 - **Annotations** are declared on every tool in `tools/list`. Ten are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
   deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
