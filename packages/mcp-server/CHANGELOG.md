@@ -6,10 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Needs `circle-ir` **4.18.0** (not yet published: it carries the advisory
-matcher, Maven version order and declared-version reader this tool is built
-on). A `circle-ir` minor, so the release train applies: `circle-ir` 4.18.0,
-then `circle-ir-ai` on 4.18, then this package.
+Built on `circle-ir` **4.18.1** (the 0.8.1 pin, unchanged): it carries the
+advisory matcher, Maven version order and declared-version reader this tool
+uses. A minor because one tool is added; no tool was removed or renamed and no
+input schema changed.
 
 ### Added
 
@@ -21,7 +21,65 @@ then `circle-ir-ai` on 4.18, then this package.
   supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
   `baseline_root`, adds the advisories a change removed, added and left, and
   the dependency drift. The snapshot is indexed once per content (digest) per
-  process. Fourteen built-in tools.
+  process. Fifteen built-in tools.
+
+## [0.8.1] - 2026-11-01
+
+Tested against `circle-ir` **4.18.1** (was 4.16.1). The optional module to pair
+it with is `circle-ir-ai` **4.30.0**, built on `4.18.1` (the release train:
+`npm run check:train`). A patch: no tool added, removed or renamed, and no
+schema changed.
+
+### Changed
+
+- **`circle-ir` pin 4.16.1 → 4.18.1** (exact). 4.18.1 carries
+  `dependencyCalls`, the engine `dependency_calls` reads, and the OWASP
+  Benchmark gains of cognium-dev #1041.
+- **`@cognium/code-facts` 0.1.0 is an exact dependency**, no longer an optional
+  peer. It needs `circle-ir` `>=4.18.0`, which the new pin meets, so a single
+  `circle-ir` is installed. `dependency_calls` now works out of the box.
+- **Optional peer `circle-ir-ai` `>=4.17.0` → `>=4.30.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai before 4.30.0
+  (on 4.16.1 or older) would silently drop the module's tools. **Upgrade
+  circle-ir-ai to 4.30.0 together with the server**: npm upgrades a caret-ranged
+  circle-ir-ai to 4.30.0, and refuses an exact older pin with `ERESOLVE`.
+
+### Fixed
+
+- `dependency_calls`' refusal no longer says code-facts is unpublished, and the
+  README's tool count says fourteen built-in tools, not eleven.
+
+## [0.8.0] - 2026-10-31
+
+Tested against `circle-ir` **4.16.1** (unchanged). The optional module to pair
+it with is still `circle-ir-ai` **4.29.0**, built on `4.16.1`. A minor because
+one tool is added; no tool was removed or renamed and no input schema changed.
+
+`@cognium/code-facts` stays an **optional peer** in this release. Its 0.1.0
+depends on `circle-ir` `>=4.18.0`, so as an exact dependency it would install a
+second `circle-ir` beside the pinned 4.16.1. It becomes an exact dependency in
+the release that moves the pin to 4.18, once a `circle-ir-ai` built on 4.18 is
+published (the release train requires it).
+
+### Added
+
+- **`dependency_calls`** (C4 0.5.0 §11, §11c; E02): for a Maven dependency
+  bump, every call site that lands on the artifact, the tests that reach each
+  one, and the sites that cannot be ruled in or out, in the shape of
+  `cognium-dev depcalls -f json`. Inputs `project_root`, `artifact`
+  (`groupId:artifactId[:version]`), `language` (`java`), `jar_path`,
+  `maven_repo_dir`, `limit`; declares an `outputSchema` and returns
+  `structuredContent`. Read-only and local. Computed by
+  `@cognium/code-facts` `runDependencyCalls` (0.1.0 or later), an **optional
+  peer**: install it beside this package to use the tool, which answers one
+  line while it is missing.
+- `buildServer({ allowedRoots })`: directories a path argument must lie in,
+  read by `dependency_calls` (absent: unconfined, as before).
+
+### Security
+
+- Production dependency audit (#40): `@modelcontextprotocol/server` 2.4.0 and
+  `zod` 4.6.7.
 
 ## [0.7.0] - 2026-10-17
 

@@ -230,6 +230,53 @@ describe('analyze_dependencies — two pins', () => {
   });
 });
 
+describe('analyze_dependencies — paths and lockfile layouts', () => {
+  /** Two modules that each reach snakeyaml through a different direct dependency. */
+  function twoPaths(root: string, snakeyaml: string): void {
+    for (const [mod, direct] of [['a', 'com.example:p'], ['b', 'com.example:q']]) {
+      mkdirSync(join(root, mod), { recursive: true });
+      writeFileSync(join(root, mod, 'pom.xml'), `<project><groupId>com.example</groupId><artifactId>${mod}</artifactId><version>1</version></project>`);
+      writeFileSync(
+        join(root, mod, 'dependency-tree.txt'),
+        `com.example:${mod}:jar:1\n\\- ${direct}:jar:1.0:compile\n   \\- org.yaml:snakeyaml:jar:${snakeyaml}:compile\n`,
+      );
+    }
+  }
+
+  it('lists every path a dependency is reached by, sorted, on both pins', async () => {
+    const base = join(tmp, 'paths-base');
+    const next = join(tmp, 'paths-head');
+    twoPaths(base, '1.33');
+    twoPaths(next, '2.0');
+    const { body } = await run({ project_root: next, baseline_root: base, advisory_db: SNAPSHOT });
+    const paths = [['com.example:p'], ['com.example:q']];
+    expect(body.dependencies.find((d: Answer) => d.name === 'org.yaml:snakeyaml').via).toEqual(paths);
+    expect(body.delta.dependencies.changed).toEqual([
+      { name: 'org.yaml:snakeyaml', from: ['1.33'], to: ['2.0'], manifests: ['a/pom.xml', 'b/pom.xml'], via: paths, declared: null },
+    ]);
+    expect(body.delta.advisories.removed.map((m: Answer) => m.advisory.id)).toEqual(['GHSA-mjmj-j48q-9wg2']);
+  });
+
+  it('reads the older per-configuration lockfiles under gradle/dependency-locks', async () => {
+    const root = join(tmp, 'gradle-legacy');
+    mkdirSync(join(root, 'gradle', 'dependency-locks'), { recursive: true });
+    writeFileSync(join(root, 'build.gradle'), "dependencies { implementation 'org.yaml:snakeyaml:1.33' }\n");
+    writeFileSync(join(root, 'gradle', 'dependency-locks', 'compileClasspath.lockfile'), 'org.yaml:snakeyaml:1.33\n');
+    writeFileSync(join(root, 'gradle', 'dependency-locks', 'notes.txt'), 'not a lockfile\n');
+    const { body } = await run({ project_root: root, advisory_db: SNAPSHOT });
+    expect(body.resolution[0]).toMatchObject({ manifest: 'build.gradle', kind: 'lockfile', dependencies: 1 });
+    expect(ids(body.matches)).toEqual(['org.yaml:snakeyaml@1.33 GHSA-mjmj-j48q-9wg2']);
+  });
+
+  it('a cleared snapshot cache indexes the records again', async () => {
+    const cache = new SnapshotCache();
+    expect((await run({ project_root: MAVEN }, cache)).body.cacheHit).toBe(false);
+    expect(cache.clear()).toBe(1);
+    expect(cache.clear()).toBe(0);
+    expect((await run({ project_root: MAVEN }, cache)).body.cacheHit).toBe(false);
+  });
+});
+
 describe('analyze_dependencies — refusals', () => {
   it('refuses a missing tree, a missing or empty snapshot, and a baseline input without a baseline', async () => {
     const empty = join(tmp, 'empty-db');

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkReleaseTrain, majorMinor, satisfies } from './check-release-train.mjs';
+import { checkReleaseTrain, majorMinor, pinsByVersion, satisfies } from './check-release-train.mjs';
 
 /** A throwaway repo with the one manifest the check reads. */
 function repo({ pin = '4.10.0', peer = '>=4.17.0' } = {}) {
@@ -109,4 +109,40 @@ test('satisfies handles the range forms this repository uses, and declines the r
   assert.equal(satisfies('4.17.1', '4.17.0'), false);
   assert.equal(satisfies('4.19.0', '*'), true);
   assert.equal(satisfies('4.19.0', '4.x || >=5'), null);
+});
+
+test('pinsByVersion keys each pin by the version npm reports, whatever the order', () => {
+  // Publish order: 4.29.1 patched after 4.30.0. Pairing by position would shift the pins.
+  const entries = [
+    { version: '4.29.0', 'dependencies.circle-ir': '4.16.1' },
+    { version: '4.30.0', 'dependencies.circle-ir': '4.18.1' },
+    { version: '4.29.1', 'dependencies.circle-ir': '4.16.1' },
+  ];
+  assert.deepEqual(pinsByVersion(entries), {
+    '4.29.0': { dependencies: { 'circle-ir': '4.16.1' } },
+    '4.30.0': { dependencies: { 'circle-ir': '4.18.1' } },
+    '4.29.1': { dependencies: { 'circle-ir': '4.16.1' } },
+  });
+  // One match comes back as a bare object.
+  assert.deepEqual(pinsByVersion({ version: '4.30.0', 'dependencies.circle-ir': '4.18.1' }), {
+    '4.30.0': { dependencies: { 'circle-ir': '4.18.1' } },
+  });
+});
+
+test('pinsByVersion refuses an entry it cannot pair rather than guessing', () => {
+  assert.throws(() => pinsByVersion([{ 'dependencies.circle-ir': '4.18.1' }]), /cannot be paired/);
+});
+
+test('the train passes with an optional peer of >=4.30.0 when 4.30.0 is on the pinned minor', () => {
+  const versions = pinsByVersion([
+    { version: '4.30.0', 'dependencies.circle-ir': '4.18.1' },
+    { version: '4.29.0', 'dependencies.circle-ir': '4.16.1' },
+  ]);
+  const root = mkdtempSync(join(tmpdir(), 'train-'));
+  mkdirSync(join(root, 'packages', 'mcp-server'), { recursive: true });
+  writeFileSync(
+    join(root, 'packages', 'mcp-server', 'package.json'),
+    JSON.stringify({ dependencies: { 'circle-ir': '4.18.1' }, peerDependencies: { 'circle-ir-ai': '>=4.30.0' } }),
+  );
+  assert.deepEqual(checkReleaseTrain(root, { fetchPackument: () => ({ versions }) }), []);
 });

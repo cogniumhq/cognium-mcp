@@ -34,6 +34,7 @@ const FLOOR_TOOLS = [
   'find_similar',
   'find_callers',
   'find_callees',
+  'dependency_calls',
   'analyze_dependencies',
   'refresh',
 ];

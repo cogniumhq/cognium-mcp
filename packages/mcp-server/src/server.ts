@@ -31,6 +31,7 @@ import { attackSurfaceSummaryConfig, makeAttackSurfaceSummaryHandler } from './t
 import { listReachableSinksConfig, makeListReachableSinksHandler } from './tools/list-reachable-sinks.js';
 import { findSimilarConfig, makeFindSimilarHandler } from './tools/find-similar.js';
 import { refreshConfig, makeRefreshHandler } from './tools/refresh.js';
+import { dependencyCallsConfig, makeDependencyCallsHandler } from './tools/dependency-calls.js';
 import { analyzeDependenciesConfig, makeAnalyzeDependenciesHandler } from './tools/analyze-dependencies.js';
 import { SnapshotCache } from './deps/snapshot.js';
 import {
@@ -85,6 +86,8 @@ export interface BuildServerOptions {
    * a server built with no modules.
    */
   enablement?: Enablement;
+  /** Directories a path argument must lie inside (`ToolContext.allowedRoots`). Absent: unconfined. */
+  allowedRoots?: readonly string[];
 }
 
 export function buildServer(opts: BuildServerOptions = {}): McpServer {
@@ -92,6 +95,7 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   const ctx: ToolContext = {
     cache,
     enablement: opts.enablement ?? floorEnablement(),
+    ...(opts.allowedRoots ? { allowedRoots: opts.allowedRoots } : {}),
   };
 
   const server = new McpServer(IDENTITY);
@@ -108,6 +112,7 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   server.registerTool('find_similar', findSimilarConfig, makeFindSimilarHandler(ctx) as never);
   server.registerTool('find_callers', findCallersConfig, makeFindCallersHandler(ctx) as never);
   server.registerTool('find_callees', findCalleesConfig, makeFindCalleesHandler(ctx) as never);
+  server.registerTool('dependency_calls', dependencyCallsConfig, makeDependencyCallsHandler(ctx) as never);
   server.registerTool('analyze_dependencies', analyzeDependenciesConfig, makeAnalyzeDependenciesHandler(SNAPSHOTS) as never);
   server.registerTool('refresh', refreshConfig, makeRefreshHandler(ctx) as never);
 
