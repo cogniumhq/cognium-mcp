@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A refused optional module is visible to the MCP client** (#26), not only on
+  stderr. `capabilities.experimental["cognium/modules"]` lists the installed
+  `circle-ir`, the modules that loaded and the modules that were refused, each
+  refusal with its reason and, for a version-skew refusal, the `circle-ir` the
+  module was built against (`builtAgainst`) next to the one the server pins
+  (`installed`). When anything was refused, `instructions` says so in one
+  paragraph. Both are in the `initialize` result and in `server/discover`. A
+  module that throws while registering is reported the same way.
+  `buildServer()` takes `refusals`; `createServer()`, `createHandler()` and the
+  stdio binary pass the loader's. No tool or schema changed.
+
 ## [0.8.1] - 2026-11-01
 
 Tested against `circle-ir` **4.18.1** (was 4.16.1). The optional module to pair
