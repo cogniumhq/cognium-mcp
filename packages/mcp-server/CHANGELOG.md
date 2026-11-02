@@ -24,7 +24,8 @@ schema changed.
 - **Optional peer `circle-ir-ai` `>=4.17.0` → `>=4.30.0`.** A module built on
   another `circle-ir` minor is refused at load, so circle-ir-ai before 4.30.0
   (on 4.16.1 or older) would silently drop the module's tools. **Upgrade
-  circle-ir-ai to 4.30.0 together with the server**; npm now warns otherwise.
+  circle-ir-ai to 4.30.0 together with the server**: npm upgrades a caret-ranged
+  circle-ir-ai to 4.30.0, and refuses an exact older pin with `ERESOLVE`.
 
 ### Fixed
 

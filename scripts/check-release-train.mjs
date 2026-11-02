@@ -82,40 +82,35 @@ function moduleReleases(fetchPackument) {
 function npmPackument() {
   const env = { ...process.env };
   delete env.npm_config_dry_run;
-  const raw = execFileSync('npm', ['view', MODULE, '--json'], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
-  const viewed = JSON.parse(raw);
-  // `npm view --json` gives the packument's fields, but `versions` is a list of
-  // strings rather than the manifests, so each version's engine pin is asked
-  // for in one further call.
-  const versions = Array.isArray(viewed.versions) ? viewed.versions : Object.keys(viewed.versions ?? {});
-  const pins = JSON.parse(
-    execFileSync('npm', ['view', `${MODULE}@>=0.0.0`, `dependencies.${ENGINE}`, '--json'], {
-      encoding: 'utf8',
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }) || 'null',
-  );
-  return { versions: zipPins(versions, pins) };
+  // Ask for each release together with its pin, so they are paired by the
+  // version npm reports rather than by position: `npm view` lists the range's
+  // matches in the registry's publish order, which need not be semver order.
+  const raw = execFileSync('npm', ['view', `${MODULE}@>=0.0.0`, 'version', `dependencies.${ENGINE}`, '--json'], {
+    encoding: 'utf8',
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return { versions: pinsByVersion(JSON.parse(raw || 'null')) };
 }
 
 /**
- * Pair each version with the `circle-ir` it pins. The range `>=0.0.0` matches
- * no prerelease, so the pins come back for the releases only, in the same
- * order as the releases in `versions`: prereleases are dropped from both
- * sides before pairing (a user installing the module gets a release). A count
- * that still differs means the order cannot be trusted, and that is thrown,
- * never guessed — a shifted list once credited one version's pin to another.
+ * Key `npm view <module>@>=0.0.0 version dependencies.<engine> --json` by
+ * version. One match comes back as a bare object, several as a list. The
+ * range matches no prerelease, which is what a user installing the module
+ * gets. An entry without a version cannot be paired, and that is thrown,
+ * never guessed: a list paired by position once credited one version's pin
+ * to another.
  */
-export function zipPins(versions, pins) {
-  const releases = versions.filter((v) => !String(v).includes('-'));
-  // One release → a bare string; several → a list.
-  const list = pins === null || pins === undefined ? [] : Array.isArray(pins) ? pins : [pins];
-  if (list.length !== releases.length) {
-    throw new Error(
-      `the registry returned ${list.length} ${ENGINE} pins for ${releases.length} ${MODULE} releases, so they cannot be paired`,
-    );
+export function pinsByVersion(entries) {
+  const list = entries === null || entries === undefined ? [] : Array.isArray(entries) ? entries : [entries];
+  const out = {};
+  for (const e of list) {
+    if (!e || typeof e.version !== 'string') {
+      throw new Error(`the registry returned a ${MODULE} entry with no version, so its ${ENGINE} pin cannot be paired`);
+    }
+    out[e.version] = { dependencies: { [ENGINE]: e[`dependencies.${ENGINE}`] ?? null } };
   }
-  return Object.fromEntries(releases.map((version, i) => [version, { dependencies: { [ENGINE]: list[i] ?? null } }]));
+  return out;
 }
 
 export function checkReleaseTrain(root, options = {}) {
