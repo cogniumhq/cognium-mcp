@@ -9,8 +9,9 @@
  *
  * The loader's contract is that **the server comes up either way**. A module
  * that is absent, broken, built against the wrong engine, or wrong in shape
- * is refused with one line on stderr, and the deterministic floor serves as
- * normal. There is no state in which a bad module takes the server down.
+ * is refused with one line on stderr — and reported to the client, see
+ * `status.ts` — and the deterministic floor serves as normal. There is no
+ * state in which a bad module takes the server down.
  */
 
 import { createRequire } from 'node:module';
@@ -38,6 +39,17 @@ export interface ModuleRefusal {
   readonly specifier: string;
   /** One line, safe to print. */
   readonly reason: string;
+  /** The module's `id`, once it was imported far enough to have one. */
+  readonly id?: string;
+  /** The module's own version, likewise. */
+  readonly version?: string;
+  /**
+   * The `circle-ir` the module says it was built against, as it declared it.
+   * Present on a version-skew refusal, which is the usual one (issue #26).
+   */
+  readonly builtAgainst?: string;
+  /** The `circle-ir` installed next to this server, on the same refusals. */
+  readonly installed?: string;
 }
 
 /**
@@ -173,7 +185,14 @@ export async function loadModules(opts: LoadModulesOptions = {}): Promise<LoadMo
 
     const range = checkCircleIrRange(mod.circleIrRange, installed);
     if (!range.ok) {
-      refusals.push({ specifier, reason: `${mod.id}@${mod.version} ${range.reason}` });
+      refusals.push({
+        specifier,
+        reason: `${mod.id}@${mod.version} ${range.reason}`,
+        id: mod.id,
+        version: mod.version,
+        builtAgainst: mod.circleIrRange,
+        installed,
+      });
       continue;
     }
 

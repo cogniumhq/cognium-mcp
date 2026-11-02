@@ -31,7 +31,9 @@ async function main(): Promise<void> {
   // with `initialize` is served exactly as before; one that speaks the
   // 2026-07-28 revision is served that. Either way it gets one server,
   // built here, for the life of the connection.
-  serveStdio(() => buildServer({ modules: discovery.modules, enablement: discovery.enablement }));
+  serveStdio(() =>
+    buildServer({ modules: discovery.modules, refusals: discovery.refusals, enablement: discovery.enablement }),
+  );
 }
 
 main().catch((err) => {
