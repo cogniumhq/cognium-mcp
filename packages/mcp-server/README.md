@@ -233,7 +233,7 @@ pass and resolves nothing.
 
 ## Optional tool modules
 
-The eleven tools above are always present. A separate package may add more by
+The fourteen tools above are always present. A separate package may add more by
 exporting a `ToolModule`:
 
 ```ts
@@ -255,7 +255,7 @@ what is looked for, or to `none` to look for nothing.
 
 **The server comes up either way.** A module that is absent, broken, wrongly
 shaped or built against a different `circle-ir` minor is refused on one line of
-stderr, and the eleven built-in tools serve as normal.
+stderr, and the fourteen built-in tools serve as normal.
 
 | Variable | Effect |
 |---|---|
@@ -282,7 +282,7 @@ decides what is *listed*, and the terms carry the grant.
 ## What a response and a tool tell you
 
 - **`provenance`** is the last field of every successful response:
-  `"deterministic"` for all eleven built-in tools. A tool from an optional module
+  `"deterministic"` for all fourteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
 - **Annotations** are declared on every tool in `tools/list`. Ten are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or

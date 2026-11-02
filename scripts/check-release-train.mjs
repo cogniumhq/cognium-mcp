@@ -95,12 +95,27 @@ function npmPackument() {
       stdio: ['ignore', 'pipe', 'pipe'],
     }) || 'null',
   );
-  // One version → a bare string; several → a list in the same order as `versions`.
-  const list = Array.isArray(pins) ? pins : [pins];
-  const manifests = Object.fromEntries(
-    versions.map((version, i) => [version, { dependencies: { [ENGINE]: list[i] ?? list[0] ?? null } }]),
-  );
-  return { versions: manifests };
+  return { versions: zipPins(versions, pins) };
+}
+
+/**
+ * Pair each version with the `circle-ir` it pins. The range `>=0.0.0` matches
+ * no prerelease, so the pins come back for the releases only, in the same
+ * order as the releases in `versions`: prereleases are dropped from both
+ * sides before pairing (a user installing the module gets a release). A count
+ * that still differs means the order cannot be trusted, and that is thrown,
+ * never guessed — a shifted list once credited one version's pin to another.
+ */
+export function zipPins(versions, pins) {
+  const releases = versions.filter((v) => !String(v).includes('-'));
+  // One release → a bare string; several → a list.
+  const list = pins === null || pins === undefined ? [] : Array.isArray(pins) ? pins : [pins];
+  if (list.length !== releases.length) {
+    throw new Error(
+      `the registry returned ${list.length} ${ENGINE} pins for ${releases.length} ${MODULE} releases, so they cannot be paired`,
+    );
+  }
+  return Object.fromEntries(releases.map((version, i) => [version, { dependencies: { [ENGINE]: list[i] ?? null } }]));
 }
 
 export function checkReleaseTrain(root, options = {}) {

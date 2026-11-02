@@ -21,6 +21,15 @@ schema changed.
 - **`@cognium/code-facts` 0.1.0 is an exact dependency**, no longer an optional
   peer. It needs `circle-ir` `>=4.18.0`, which the new pin meets, so a single
   `circle-ir` is installed. `dependency_calls` now works out of the box.
+- **Optional peer `circle-ir-ai` `>=4.17.0` → `>=4.30.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai before 4.30.0
+  (on 4.16.1 or older) would silently drop the module's tools. **Upgrade
+  circle-ir-ai to 4.30.0 together with the server**; npm now warns otherwise.
+
+### Fixed
+
+- `dependency_calls`' refusal no longer says code-facts is unpublished, and the
+  README's tool count says fourteen built-in tools, not eleven.
 
 ## [0.8.0] - 2026-10-31
 

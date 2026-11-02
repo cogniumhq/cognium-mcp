@@ -39,8 +39,9 @@ const COORDINATE = /^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.+-]+)?$/;
 
 // ─── What this file needs from @cognium/code-facts ─────────────────────────
 //
-// Declared here, not imported, so the server type-checks and builds without
-// the unpublished package. The shapes are code-facts 0.1.0's.
+// Declared here, not imported, so the server type-checks without loading the
+// package at build time (it is imported only when the tool is called). The
+// shapes are code-facts 0.1.0's.
 
 interface Site { file: string; line: number; col: number }
 
@@ -115,8 +116,8 @@ export function makeCodeFactsLoader(
     } catch {
       return {
         refused:
-          `dependency_calls needs ${CODE_FACTS_PACKAGE} (capability dependency-calls) installed beside the server; ` +
-          'it is not published yet.',
+          `dependency_calls needs ${CODE_FACTS_PACKAGE} (capability dependency-calls), a dependency of this server; ` +
+          'it could not be loaded — reinstall the server.',
       };
     }
     if (

@@ -11,8 +11,8 @@
  *   - counts and `covered` are over the whole answer, never the cut lists;
  *   - path arguments respect allowed roots, and a Maven repository outside
  *     them is not read;
- *   - without `@cognium/code-facts` (it is not published yet) the tool
- *     answers one line and the server keeps serving.
+ *   - when `@cognium/code-facts` cannot be loaded the tool answers one line
+ *     and the server keeps serving.
  *
  * The live half needs `@cognium/code-facts` on a `circle-ir` that carries
  * `dependencyCalls` (cognium-dev #1037/#1039), installed beside the server;
@@ -170,7 +170,7 @@ describe('dependency_calls — loading @cognium/code-facts', () => {
 
   it('refuses a missing package, one without the capability, and another schema', async () => {
     const missing = await makeCodeFactsLoader(async () => { throw new Error('ERR_MODULE_NOT_FOUND'); })();
-    expect(missing).toEqual({ refused: expect.stringMatching(/needs @cognium\/code-facts .* not published yet/) });
+    expect(missing).toEqual({ refused: expect.stringMatching(/needs @cognium\/code-facts .* could not be loaded/) });
     const old = await makeCodeFactsLoader(async () => ({ ...good, capabilities: () => ['path-set-diff'] }))();
     expect(old).toEqual({ refused: expect.stringMatching(/does not serve the dependency-calls capability/) });
     const other = await makeCodeFactsLoader(async () => ({ ...good, SCHEMA_VERSION: '0.2' }))();

@@ -13,7 +13,7 @@ The Cognium MCP server and the editor plugins that use it.
 npx -y @cognium/mcp-server
 ```
 
-It speaks MCP over stdio and serves eleven deterministic static-analysis tools
+It speaks MCP over stdio and serves fourteen deterministic static-analysis tools
 built on [`circle-ir`](https://www.npmjs.com/package/circle-ir): scan a project,
 list entry points and reachable sinks, trace taint paths, explain a finding,
 check a sanitizer. No API key, no network, no model.
@@ -31,7 +31,7 @@ await server.connect(transport);
 Optional tool modules are loaded when they are installed next to the server.
 [`circle-ir-ai`](https://www.npmjs.com/package/circle-ir-ai) ships one,
 `circle-ir-ai/mcp`, which adds ten more tools. A module built against a
-different `circle-ir` minor is refused on one line of stderr and the eleven
+different `circle-ir` minor is refused on one line of stderr and the fourteen
 built-in tools keep serving.
 
 Client configuration, the environment variables and the licence states are in

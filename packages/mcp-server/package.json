@@ -72,7 +72,7 @@
     "zod": "^4.6.7"
   },
   "peerDependencies": {
-    "circle-ir-ai": ">=4.17.0"
+    "circle-ir-ai": ">=4.30.0"
   },
   "peerDependenciesMeta": {
     "circle-ir-ai": {
