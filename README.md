@@ -31,7 +31,8 @@ await server.connect(transport);
 Optional tool modules are loaded when they are installed next to the server.
 [`circle-ir-ai`](https://www.npmjs.com/package/circle-ir-ai) ships one,
 `circle-ir-ai/mcp`, which adds ten more tools. A module built against a
-different `circle-ir` minor is refused on one line of stderr and the fourteen
+different `circle-ir` minor is refused, on stderr and to the client (the
+server's capabilities and `instructions`), and the fourteen
 built-in tools keep serving.
 
 Client configuration, the environment variables and the licence states are in
