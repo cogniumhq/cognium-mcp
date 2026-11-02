@@ -12,10 +12,10 @@
  * answer; this file only finds the jar, turns the capability's anchors back
  * into that object, and cuts the two lists at `limit`.
  *
- * `@cognium/code-facts` is not published yet, and neither is a `circle-ir`
- * that carries `dependencyCalls`. Until both are, the package is an optional
- * peer: it is imported when the tool is called, and the tool answers with one
- * line when it is missing, while every other tool keeps serving.
+ * `@cognium/code-facts` is an exact dependency since 0.8.1 (on `circle-ir`
+ * 4.18.1, which carries `dependencyCalls`). It is still imported when the tool
+ * is called, and the tool answers with one line if it cannot be loaded, while
+ * every other tool keeps serving.
  */
 
 import { z } from 'zod';
@@ -39,8 +39,9 @@ const COORDINATE = /^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.+-]+)?$/;
 
 // ─── What this file needs from @cognium/code-facts ─────────────────────────
 //
-// Declared here, not imported, so the server type-checks and builds without
-// the unpublished package. The shapes are code-facts 0.1.0's.
+// Declared here, not imported, so the server type-checks without loading the
+// package at build time (it is imported only when the tool is called). The
+// shapes are code-facts 0.1.0's.
 
 interface Site { file: string; line: number; col: number }
 
@@ -115,8 +116,8 @@ export function makeCodeFactsLoader(
     } catch {
       return {
         refused:
-          `dependency_calls needs ${CODE_FACTS_PACKAGE} (capability dependency-calls) installed beside the server; ` +
-          'it is not published yet.',
+          `dependency_calls needs ${CODE_FACTS_PACKAGE} (capability dependency-calls), a dependency of this server; ` +
+          'it could not be loaded — reinstall the server.',
       };
     }
     if (

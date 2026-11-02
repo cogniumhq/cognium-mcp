@@ -78,7 +78,7 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `find_similar` | Given a finding id, return other findings sharing the same `rule_id` and/or `sink_type`. |
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
-| `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Needs `@cognium/code-facts` (not published yet). |
+| `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Computed by `@cognium/code-facts` 0.1.0, installed with the server. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ## Resources
@@ -127,13 +127,10 @@ tests reaching each (covered when `tests[0].class` is `strong`), `covered`,
 `uncovered`, `unattributedSites[]` and `partial[]`, plus `engine`, `facts`,
 `counts` and truncation. The contract is C4 0.5.0 §11c.
 
-It is computed by `@cognium/code-facts`, which is not on npm yet (it needs a
-`circle-ir` release carrying `dependencyCalls`). Until then it is an optional
-peer: install it beside the server from a cognium-dev build, or the tool
-answers with one line saying it is missing. For development, extract the
-packed `@cognium/code-facts` into `node_modules/@cognium/code-facts` and the
-packed `circle-ir` it was built on into its own `node_modules/circle-ir`, so
-the server's `circle-ir` stays the pinned one.
+It is computed by `@cognium/code-facts` 0.1.0, an exact dependency of the
+server since 0.8.1, on the same `circle-ir` (4.18.1) the server pins, so one
+`circle-ir` is installed. If the package cannot be loaded, the tool answers
+with one line saying so, and every other tool keeps serving.
 
 ## Reading a navigation answer
 
@@ -236,7 +233,7 @@ pass and resolves nothing.
 
 ## Optional tool modules
 
-The eleven tools above are always present. A separate package may add more by
+The fourteen tools above are always present. A separate package may add more by
 exporting a `ToolModule`:
 
 ```ts
@@ -258,7 +255,7 @@ what is looked for, or to `none` to look for nothing.
 
 **The server comes up either way.** A module that is absent, broken, wrongly
 shaped or built against a different `circle-ir` minor is refused on one line of
-stderr, and the eleven built-in tools serve as normal.
+stderr, and the fourteen built-in tools serve as normal.
 
 | Variable | Effect |
 |---|---|
@@ -285,7 +282,7 @@ decides what is *listed*, and the terms carry the grant.
 ## What a response and a tool tell you
 
 - **`provenance`** is the last field of every successful response:
-  `"deterministic"` for all eleven built-in tools. A tool from an optional module
+  `"deterministic"` for all fourteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
 - **Annotations** are declared on every tool in `tools/list`. Ten are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
