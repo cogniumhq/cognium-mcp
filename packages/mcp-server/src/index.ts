@@ -22,6 +22,14 @@ export {
 export { startupLines } from './startup.js';
 
 export {
+  MODULES_CAPABILITY,
+  moduleStatus,
+  statusInstructions,
+  type ModuleStatus,
+  type LoadedModuleStatus,
+} from './status.js';
+
+export {
   loadModules,
   moduleSpecifiers,
   circleIrVersion,

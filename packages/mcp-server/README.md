@@ -257,6 +257,19 @@ what is looked for, or to `none` to look for nothing.
 shaped or built against a different `circle-ir` minor is refused on one line of
 stderr, and the fourteen built-in tools serve as normal.
 
+A refusal is also visible to the MCP client, on both protocol eras (the
+`initialize` result and `server/discover`):
+
+- `capabilities.experimental["cognium/modules"]` is always present:
+  `{ circleIr, loaded: [{ id, version, licence, circleIrRange }], refused:
+  [{ specifier, reason, id?, version?, builtAgainst?, installed? }] }`. On a
+  version-skew refusal, `builtAgainst` is the `circle-ir` the module declares
+  and `installed` the one this server pins.
+- `instructions` carries the same facts as one paragraph when, and only when,
+  something was refused.
+
+A module that throws while registering is reported the same way.
+
 | Variable | Effect |
 |---|---|
 | `COGNIUM_MCP_MODULES` | Which module specifiers to look for. `none` disables. |

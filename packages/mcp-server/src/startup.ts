@@ -12,6 +12,7 @@
 
 import type { Discovery } from './server.js';
 import { SERVER_NAME, SERVER_VERSION } from './server.js';
+import { stillServing } from './status.js';
 
 export function startupLines(found: Discovery): string[] {
   const tag = `[${SERVER_NAME}]`;
@@ -43,12 +44,9 @@ export function startupLines(found: Discovery): string[] {
 
   // A refusal costs only the module that was refused: say what is left, which
   // is the floor alone unless another module did load.
-  const stillServing =
-    found.modules.length === 0
-      ? 'Serving the deterministic floor only.'
-      : `Still serving the deterministic floor and ${found.modules.map((m) => m.id).join(', ')}.`;
+  const serving = stillServing(found.modules.map((m) => m.id));
   for (const refusal of found.refusals) {
-    lines.push(`${tag} refused ${refusal.specifier}: ${refusal.reason}. ${stillServing}`);
+    lines.push(`${tag} refused ${refusal.specifier}: ${refusal.reason}. ${serving}`);
   }
 
   return lines;
