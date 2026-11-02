@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-01
+
+Tested against `circle-ir` **4.18.1** (was 4.16.1). The optional module to pair
+it with is `circle-ir-ai` **4.30.0**, built on `4.18.1` (the release train:
+`npm run check:train`). A patch: no tool added, removed or renamed, and no
+schema changed.
+
+### Changed
+
+- **`circle-ir` pin 4.16.1 → 4.18.1** (exact). 4.18.1 carries
+  `dependencyCalls`, the engine `dependency_calls` reads, and the OWASP
+  Benchmark gains of cognium-dev #1041.
+- **`@cognium/code-facts` 0.1.0 is an exact dependency**, no longer an optional
+  peer. It needs `circle-ir` `>=4.18.0`, which the new pin meets, so a single
+  `circle-ir` is installed. `dependency_calls` now works out of the box.
+
 ## [0.8.0] - 2026-10-31
 
 Tested against `circle-ir` **4.16.1** (unchanged). The optional module to pair

@@ -12,10 +12,10 @@
  * answer; this file only finds the jar, turns the capability's anchors back
  * into that object, and cuts the two lists at `limit`.
  *
- * `@cognium/code-facts` is not published yet, and neither is a `circle-ir`
- * that carries `dependencyCalls`. Until both are, the package is an optional
- * peer: it is imported when the tool is called, and the tool answers with one
- * line when it is missing, while every other tool keeps serving.
+ * `@cognium/code-facts` is an exact dependency since 0.8.1 (on `circle-ir`
+ * 4.18.1, which carries `dependencyCalls`). It is still imported when the tool
+ * is called, and the tool answers with one line if it cannot be loaded, while
+ * every other tool keeps serving.
  */
 
 import { z } from 'zod';
