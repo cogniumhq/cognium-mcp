@@ -231,6 +231,46 @@ await server.connect(myTransport); // serves the 2025-era protocol only
 `buildServer(options)` is the synchronous form: it registers exactly what you
 pass and resolves nothing.
 
+## Which directories a tool may read
+
+Every path argument of every tool — `scan.path`, every `project_root`,
+`dependency_calls`' `jar_path` and `maven_repo_dir`, nested paths such as
+`site.file`, and the path arguments of an optional module's tools — is
+**confined to the allowed roots** before the tool runs (since the release after
+0.8.1, #37):
+
+- a path with a `..` segment is refused, wherever it would land;
+- on a POSIX host a Windows-style path (backslashes, `C:`) is refused; on
+  Windows a UNC path (`\\server\share`) is;
+- everything else is resolved with `realpath`, so a symlink is judged by where
+  it points, and refused unless that lies inside a root. A tree argument inside
+  a root reaches the tool as its real path.
+
+The roots are, in order: `allowedRoots` passed to `buildServer()`,
+`createServer()` or `createHandler()`; else `COGNIUM_MCP_ALLOWED_ROOTS`
+(directories separated by `:`, or `;` on Windows); else **the working
+directory** the server was started in. The opt-out is explicit:
+`allowedRoots: '*'` or `COGNIUM_MCP_ALLOWED_ROOTS=*`. The stdio binary says on
+stderr which applies.
+
+Over HTTP, set the roots: the host's working directory holds the host's own
+files. Some clients start stdio servers in `/` (Claude Desktop on macOS does),
+which makes the working-directory default the whole disk; set
+`COGNIUM_MCP_ALLOWED_ROOTS` in the client's `env` there:
+
+```json
+"cognium": {
+  "command": "npx",
+  "args": ["-y", "@cognium/mcp-server"],
+  "env": { "COGNIUM_MCP_ALLOWED_ROOTS": "/Users/me/src" }
+}
+```
+
+`dependency_calls` reads the local Maven repository (`~/.m2/repository`) only
+when it lies inside a root; otherwise the artifact's packages come from the
+built-in table and the answer's `note` says so. Add the repository to
+`COGNIUM_MCP_ALLOWED_ROOTS`, or pass `jar_path`, to have the jar read.
+
 ## Optional tool modules
 
 The fourteen tools above are always present. A separate package may add more by
@@ -246,6 +286,9 @@ export default {
     // ctx.cache      — the server's analysis cache, shared with every tool
     // ctx.enablement — what this install may offer; the module decides what
     //                  to register, and checks again at call time
+    // ctx.allowedRoots — the real paths tools may read. The server has
+    //                  already checked the tool's path arguments; hold any
+    //                  further path the module reads to the same roots
   },
 };
 ```
@@ -260,6 +303,7 @@ stderr, and the fourteen built-in tools serve as normal.
 | Variable | Effect |
 |---|---|
 | `COGNIUM_MCP_MODULES` | Which module specifiers to look for. `none` disables. |
+| `COGNIUM_MCP_ALLOWED_ROOTS` | The directories tools may read, `:`-separated (`;` on Windows). Default: the working directory. `*` turns confinement off. |
 | `COGNIUM_ENDPOINT` | An opaque endpoint passed through to modules. The server never parses or connects to it. |
 | `COGNIUM_LICENSE` | A licence token, verified offline. Also read from `$COGNIUM_CONFIG_DIR/license`, default `~/.cognium/license`. |
 | `COGNIUM_LICENSE_PUBKEY` | Extra verification keys as `kid=key[,kid=key]`, base64url raw Ed25519, merged over the published ones. A bare key with no `kid=` matches any token, which is a development convenience and not for production. |

@@ -16,10 +16,11 @@ export interface ToolContext {
    */
   enablement: Enablement;
   /**
-   * Directories a path argument must lie inside, when the host names them.
-   * Absent means unconfined: the caller owns its paths, as an in-process
-   * caller of `buildServer()` does. Read by `dependency_calls` (C4 0.5.0),
-   * which also reads a Maven repository outside the project.
+   * The directories tools may read (issue #37), as real paths. The server
+   * has already checked every path argument against them before a tool
+   * runs; a tool or module that reads further paths of its own (a Maven
+   * repository, a path named inside a file) holds them to the same roots, as
+   * `dependency_calls` does. Absent only when the host opted out with `'*'`.
    */
   allowedRoots?: readonly string[];
 }

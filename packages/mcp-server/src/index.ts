@@ -22,6 +22,16 @@ export {
 export { startupLines } from './startup.js';
 
 export {
+  RootGuard,
+  rootsFromEnv,
+  resolveAllowedRoots,
+  ENV_ALLOWED_ROOTS,
+  UNCONFINED,
+  MAX_PATH_LENGTH,
+  type AllowedRoots,
+} from './roots.js';
+
+export {
   loadModules,
   moduleSpecifiers,
   circleIrVersion,

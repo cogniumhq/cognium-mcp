@@ -369,7 +369,7 @@ describe.skipIf(!available)('dependency_calls — live, over @cognium/code-facts
   });
 
   it('answers through the server with structuredContent that meets its output schema', async () => {
-    const server = buildServer();
+    const server = buildServer({ allowedRoots: [tmp] });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide);
     const client = new Client({ name: 't', version: '0' });
