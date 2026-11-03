@@ -42,23 +42,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `buildServer()` takes `refusals`; `createServer()`, `createHandler()` and the
   stdio binary pass the loader's. No tool or schema changed.
 
-- **`find_dead_code`** — per declaration of a TypeScript / JavaScript project,
-  the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or
-  `dead`, the shortest strong and weak paths from a product entry, unresolved
-  sites, and `reachedByTest`. Inputs `project_root`, `root_kinds[]`,
-  `verdicts[]`, `limit`. Declares an `outputSchema`; read-only, local.
+- **`find_dead_code`** — per declaration, the engine's `dead-code@0.1` fact:
+  `live`, `may-be-live` (with reasons) or `dead`, the shortest strong and weak
+  paths from an entry, unresolved sites, `partialFiles`, and `reachedByTest`.
+  Inputs `project_root`, `language`, `root_kinds[]`, `verdicts[]`, `limit`.
 - **`removal_reach`** — for two checked-out trees (`project_root` = head,
   `baseline_root` = base), every removed declaration with what reached it at
   the base (`removal-reach@0.1`); moves and renames listed apart in `moved[]`;
-  `partial[]` for files that did not parse. Declares an `outputSchema`.
-- Both take **Java** projects too, through `circle-ir`'s `buildJavaGraph`
-  (`META-INF/services` files feed the entry index), in the same output shape.
-  A new optional `language` (`java` · `typescript` · `javascript`) picks the
-  graph; by default the only family present is used, and a tree holding both
-  Java and TypeScript/JavaScript is asked to say which.
+  `partial[]` and `partialFiles` for files that did not parse at either pin.
+- Both build the engine's graph for **TypeScript / JavaScript, Java, Python or
+  Go** (`buildTsCallGraph`, `buildJavaGraph`, `buildPythonGraph`,
+  `buildGoGraph`), in one output shape. `language` picks the graph; by default
+  the only family present is used, and a tree holding more than one is asked
+  to say which (C4 0.4.0).
+- Both apply **the rule `no-inferred-edge-decides@0.1`**. Each fact gets a
+  `decision`, and an inferred edge neither proves code live nor proves it
+  dead:
+  - `reachable` on a strong path;
+  - `unreachable` only with no path of any kind from a non-empty root set,
+    nothing unresolved and no unparsed file that could reach it;
+  - `undecided` otherwise.
+
+  `because` lists the facts the outcome rests on. `removal_reach` also leaves
+  a removal `undecided` when its file did not parse at the head, and sums the
+  change up in `decisions.allUnreachable`: `true`, `false` or `null`.
+- Both return the evidence the decisions are read against. `entrySet` holds
+  the roots used: kinds, certainty, places and a digest. `scope` holds the
+  files read and the directories skipped.
+- Both validate their input and answer with one line and `isError` for:
+  - an empty `root_kinds` or `verdicts`;
+  - a language with no files under a root;
+  - overlapping or identical roots (`removal_reach`);
+  - a tree of 50,000 files or more.
 - Both carry `engine: { package: "circle-ir", version }`, because the engine's
-  schemes do not name the version that computed them. The engine's answer is
-  passed through unchanged; only the envelope and truncation are the server's.
+  schemes do not name the version that computed them. Every field the engine
+  returns is passed through unchanged; the envelope, `decision`, `entrySet`,
+  `scope`, `decisions` and truncation are the server's. Both declare an
+  `outputSchema` and return `structuredContent`; both are read-only and local.
+  The `META-INF/services` walk does not follow symlinks.
 
 ## [0.8.1] - 2026-11-01
 

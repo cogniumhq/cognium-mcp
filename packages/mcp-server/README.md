@@ -79,8 +79,8 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
 | `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Computed by `@cognium/code-facts` 0.1.0, installed with the server. |
-| `find_dead_code` | Per declaration, the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or `dead`, with the paths from a product entry and the first test that reaches it. TypeScript, JavaScript, Java. |
-| `removal_reach` | For two checked-out trees, every removed declaration with what reached it at the base (`removal-reach@0.1`); moves and renames listed apart. TypeScript, JavaScript, Java. |
+| `find_dead_code` | Per declaration, the engine's `dead-code@0.1` fact (`live`, `may-be-live` with reasons, or `dead`, with the paths from an entry and the first test that reaches it), and a `decision` under the rule "no inferred edge decides", against the roots listed in `entrySet`. TypeScript, JavaScript, Java, Python, Go. |
+| `removal_reach` | For two checked-out trees, every removed declaration with what reached it at the base (`removal-reach@0.1`; moves and renames listed apart), each with the same `decision`, and `allUnreachable` over the change. TypeScript, JavaScript, Java, Python, Go. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ## Resources
@@ -133,6 +133,46 @@ It is computed by `@cognium/code-facts` 0.1.0, an exact dependency of the
 server since 0.8.1, on the same `circle-ir` (4.18.1) the server pins, so one
 `circle-ir` is installed. If the package cannot be loaded, the tool answers
 with one line saying so, and every other tool keeps serving.
+
+## Dead code and removals
+
+`find_dead_code` takes `project_root`; `removal_reach` takes `project_root`
+(the head) and `baseline_root` (the base), two separate checkouts. Both take
+`language` (`typescript` · `javascript` · `java` · `python` · `go`; by default
+the one family present), `root_kinds` (default every entry kind except `test`)
+and `limit`. The engine's answer is passed through unchanged; the contract is
+C4 0.3.0 §11, with `language` from 0.4.0.
+
+Each declaration also carries a `decision` under one rule,
+`no-inferred-edge-decides@0.1`. An inferred edge neither proves code live nor
+proves it dead:
+
+| `decision.outcome` | When | `because` |
+| ---- | ---- | ---- |
+| `reachable` | a strong path: from a `declared` or `conventional` entry over `exact` or `polymorphic` calls | `strong-path` |
+| `unreachable` | no path of any kind from any root, no unresolved site that could bind to it, no unparsed file that could reach it | all four of `no-strong-path`, `no-weak-path`, `no-unresolved-site`, `no-partial-file` |
+| `undecided` | anything else: a person decides | any of `inferred-entry`, `inferred-call`, `reference`, `unresolved-site`, `partial-file`, `partial-at-head` (its file did not parse at the head, so it may not be removed at all), `no-entries` |
+
+Read a decision against the evidence next to it:
+
+- `entrySet` lists the roots the walk started from: their kinds, their
+  certainty, where they are, and a digest.
+- `scope` gives how many files were read, and which directories were skipped.
+
+With no roots, nothing is `unreachable`. `removal_reach` sums the change up in
+`decisions.allUnreachable`:
+
+- `true` when something was removed and every removal is `unreachable`;
+- `false` when any removal is `reachable`;
+- `null` otherwise.
+
+The tools refuse these with one line:
+
+- an empty `root_kinds`;
+- a language with no files under a root;
+- two roots that are the same directory or overlap;
+- a tree of 50,000 files or more, since an answer over part of a tree could
+  call live code dead.
 
 ## Reading a navigation answer
 
