@@ -36,7 +36,7 @@ beforeAll(async () => {
       '',
     ].join('\n'),
   );
-  const server = buildServer();
+  const server = buildServer({ allowedRoots: [root, javaRoot] });
   const [c, s] = InMemoryTransport.createLinkedPair();
   await server.connect(s);
   client = new Client({ name: 'output-schemas', version: '0' });
