@@ -79,6 +79,8 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `find_callers` | Who calls a method, with a resolution tier on every answer and a reason on every site it could not resolve. Java. |
 | `find_callees` | What a method calls, with the same tiers and reasons. Java. |
 | `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Computed by `@cognium/code-facts` 0.1.0, installed with the server. |
+| `find_dead_code` | Per declaration, the engine's `dead-code@0.1` fact: `live`, `may-be-live` (with reasons) or `dead`, with the paths from a product entry and the first test that reaches it. TypeScript, JavaScript, Java. |
+| `removal_reach` | For two checked-out trees, every removed declaration with what reached it at the base (`removal-reach@0.1`); moves and renames listed apart. TypeScript, JavaScript, Java. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ## Resources
@@ -273,7 +275,7 @@ built-in table and the answer's `note` says so. Add the repository to
 
 ## Optional tool modules
 
-The fourteen tools above are always present. A separate package may add more by
+The sixteen tools above are always present. A separate package may add more by
 exporting a `ToolModule`:
 
 ```ts
@@ -298,7 +300,7 @@ what is looked for, or to `none` to look for nothing.
 
 **The server comes up either way.** A module that is absent, broken, wrongly
 shaped or built against a different `circle-ir` minor is refused on one line of
-stderr, and the fourteen built-in tools serve as normal.
+stderr, and the sixteen built-in tools serve as normal.
 
 A refusal is also visible to the MCP client, on both protocol eras (the
 `initialize` result and `server/discover`):
@@ -339,7 +341,7 @@ decides what is *listed*, and the terms carry the grant.
 ## What a response and a tool tell you
 
 - **`provenance`** is the last field of every successful response:
-  `"deterministic"` for all fourteen built-in tools. A tool from an optional module
+  `"deterministic"` for all sixteen built-in tools. A tool from an optional module
   that used a model says `llm: <model>`.
 - **Annotations** are declared on every tool in `tools/list`. Ten are
   `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
