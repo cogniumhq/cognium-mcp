@@ -12,6 +12,8 @@ import { ProjectCache } from './cache.js';
 import type { ToolContext } from './tools/types.js';
 import { registerResources } from './resources/index.js';
 import { guardParams } from './params-guard.js';
+import { RootGuard, resolveAllowedRoots, type AllowedRoots } from './roots.js';
+import { errorResult } from './tools/types.js';
 import { floorEnablement, enablementForProcess, type Enablement } from './enablement.js';
 import {
   loadModules,
@@ -85,19 +87,53 @@ export interface BuildServerOptions {
    * throws while registering.
    */
   refusals?: readonly ModuleRefusal[];
-  /** Directories a path argument must lie inside (`ToolContext.allowedRoots`). Absent: unconfined. */
-  allowedRoots?: readonly string[];
+  /**
+   * Directories a tool may read (issue #37). Every path argument of every
+   * tool — the floor's and a module's — is refused if it has a `..` segment
+   * or is Windows-style on a POSIX host, and otherwise resolved with
+   * `realpath` and refused unless it lies inside one of these, so a symlink
+   * cannot lead out. **Absent, the server is still confined**: to
+   * `COGNIUM_MCP_ALLOWED_ROOTS` when that is set, else to the working
+   * directory. `'*'` (or `COGNIUM_MCP_ALLOWED_ROOTS=*`) is the explicit
+   * opt-out. An empty list refuses every path.
+   */
+  allowedRoots?: AllowedRoots;
+}
+
+/**
+ * Wrap `registerTool` so every tool's callback sees its path arguments
+ * checked against the allowed roots first. Installed before any tool is
+ * registered, so a module's tools are covered as well as the floor's.
+ */
+function confineTools(server: McpServer, guard: RootGuard): void {
+  const register = server.registerTool.bind(server) as (...a: unknown[]) => unknown;
+  (server as unknown as { registerTool: (...a: unknown[]) => unknown }).registerTool = (
+    name: unknown,
+    config: unknown,
+    cb: unknown,
+  ) => {
+    const hasInput = typeof config === 'object' && config !== null && 'inputSchema' in config;
+    if (!hasInput || typeof cb !== 'function') return register(name, config, cb);
+    const fn = cb as (args: unknown, extra: unknown) => unknown;
+    return register(name, config, (args: unknown, extra: unknown) => {
+      const checked = guard.apply(args);
+      if ('error' in checked) return errorResult(checked.error);
+      return fn(checked.args, extra);
+    });
+  };
 }
 
 export function buildServer(opts: BuildServerOptions = {}): McpServer {
   const cache = new ProjectCache(opts.cacheCapacity ?? 3);
+  const guard = new RootGuard(resolveAllowedRoots(opts.allowedRoots));
   const ctx: ToolContext = {
     cache,
     enablement: opts.enablement ?? floorEnablement(),
-    ...(opts.allowedRoots ? { allowedRoots: opts.allowedRoots } : {}),
+    ...(guard.unconfined ? {} : { allowedRoots: guard.roots }),
   };
 
   const server = new McpServer(IDENTITY);
+  confineTools(server, guard);
 
   server.registerTool('scan', scanConfig, makeScanHandler(ctx) as never);
   server.registerTool('explain_finding', explainFindingConfig, makeExplainFindingHandler(ctx) as never);

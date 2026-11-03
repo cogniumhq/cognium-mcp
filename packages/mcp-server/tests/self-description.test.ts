@@ -39,7 +39,7 @@ beforeAll(async () => {
     ].join('\n'),
   );
 
-  const server = buildServer();
+  const server = buildServer({ allowedRoots: [root] });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   client = new Client({ name: 'self-description', version: '0' });
