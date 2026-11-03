@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Every path argument is confined to allowed roots, by default** (#37).
+  Before, every path-taking tool read any absolute directory on the host and
+  followed a symlink out of a project; mounted over HTTP with
+  `createHandler()`, a token holder could read text from any directory on the
+  server's host. Now every path argument of every tool, floor and module, is
+  checked before the tool runs: a `..` segment is refused, a Windows-style path
+  on a POSIX host (a UNC path on Windows) is refused, and everything else is
+  resolved with `realpath` and refused outside the roots, so a symlink cannot
+  escape. The roots are `allowedRoots` (on `buildServer`, `createServer`,
+  `createHandler`), else `COGNIUM_MCP_ALLOWED_ROOTS`, else the working
+  directory. `'*'` as either is the explicit opt-out. `ToolContext.allowedRoots`
+  carries the real roots to modules (absent only when unconfined).
+
+  **This changes a default.** A call that used to read a directory outside the
+  working directory is now refused with `isError` and one line naming
+  `COGNIUM_MCP_ALLOWED_ROOTS`. `buildServer()` with no options is confined
+  too; it used to be unconfined. `dependency_calls` no longer reads
+  `~/.m2/repository` unless that is inside a root (its `note` says so). Clients
+  that start servers in `/` (Claude Desktop on macOS) should set
+  `COGNIUM_MCP_ALLOWED_ROOTS`.
+
 ### Added
 
 - **Every tool declares an `outputSchema` and returns `structuredContent`**
