@@ -9,3 +9,9 @@ Fixture projects for `analyze_dependencies`.
 - `gradle-lock/` — a Gradle project with a `gradle.lockfile`.
 - `declared-only/` — a `pom.xml` with no resolved input, beside a
   `package.json` (an ecosystem this tool does not cover).
+- `tycho-target/` — an Eclipse/Tycho reactor shaped like iDempiere's
+  `org.idempiere.p2.targetplatform`: no pom `<dependency>` rows; the
+  third-party versions are `<location type="Maven">` entries of
+  `maven.locations.target` (flat and `<dependencies>` forms, a commented-out
+  location, bnd `<instructions>` in CDATA, a `${…}` version), beside an
+  aggregator `.target` with only `InstallableUnit` and `Target` locations.
