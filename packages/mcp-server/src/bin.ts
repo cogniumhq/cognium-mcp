@@ -16,7 +16,9 @@
  */
 
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
-import { buildServer, discoverModules } from './server.js';
+import { buildServer, discoverModules, SERVER_NAME } from './server.js';
+import { parse, resolve } from 'node:path';
+import { resolveAllowedRoots, ENV_ALLOWED_ROOTS, UNCONFINED } from './roots.js';
 import { startupLines } from './startup.js';
 
 async function main(): Promise<void> {
@@ -26,12 +28,29 @@ async function main(): Promise<void> {
   for (const line of startupLines(discovery)) {
     process.stderr.write(`${line}\n`);
   }
+  // Tools read only under the allowed roots (issue #37): the directories in
+  // COGNIUM_MCP_ALLOWED_ROOTS, else the working directory the client started
+  // the server in. Opting out is allowed, and said out loud.
+  const roots = resolveAllowedRoots(undefined);
+  if (roots === UNCONFINED) {
+    process.stderr.write(`[${SERVER_NAME}] paths unconfined (${ENV_ALLOWED_ROOTS}=*): tools may read any directory on this host\n`);
+  } else {
+    const whole = roots.some((r) => resolve(r) === parse(resolve(r)).root);
+    process.stderr.write(
+      `[${SERVER_NAME}] paths confined to ${roots.length} allowed root${roots.length === 1 ? '' : 's'}` +
+        (process.env[ENV_ALLOWED_ROOTS] ? ` (${ENV_ALLOWED_ROOTS})` : ' (the working directory)') +
+        (whole ? `; one is the filesystem root, so nothing is confined: set ${ENV_ALLOWED_ROOTS}` : '') +
+        '\n',
+    );
+  }
   // `serveStdio` owns the transport and decides, from the client's opening
   // message, which protocol era the connection speaks. A client that opens
   // with `initialize` is served exactly as before; one that speaks the
   // 2026-07-28 revision is served that. Either way it gets one server,
   // built here, for the life of the connection.
-  serveStdio(() => buildServer({ modules: discovery.modules, enablement: discovery.enablement }));
+  serveStdio(() =>
+    buildServer({ modules: discovery.modules, refusals: discovery.refusals, enablement: discovery.enablement }),
+  );
 }
 
 main().catch((err) => {

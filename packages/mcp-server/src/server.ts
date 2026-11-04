@@ -12,6 +12,8 @@ import { ProjectCache } from './cache.js';
 import type { ToolContext } from './tools/types.js';
 import { registerResources } from './resources/index.js';
 import { guardParams } from './params-guard.js';
+import { RootGuard, resolveAllowedRoots, type AllowedRoots } from './roots.js';
+import { errorResult } from './tools/types.js';
 import { floorEnablement, enablementForProcess, type Enablement } from './enablement.js';
 import {
   loadModules,
@@ -19,6 +21,7 @@ import {
   type ToolModule,
   type ModuleRefusal,
 } from './modules.js';
+import { MODULES_CAPABILITY, moduleStatus, statusInstructions } from './status.js';
 
 import { scanConfig, makeScanHandler } from './tools/scan.js';
 import { explainFindingConfig, makeExplainFindingHandler } from './tools/explain-finding.js';
@@ -86,19 +89,60 @@ export interface BuildServerOptions {
    * a server built with no modules.
    */
   enablement?: Enablement;
-  /** Directories a path argument must lie inside (`ToolContext.allowedRoots`). Absent: unconfined. */
-  allowedRoots?: readonly string[];
+  /**
+   * Modules the loader refused (`Discovery.refusals`). Not registered — they
+   * are reported to the client in `capabilities.experimental` and
+   * `instructions` (issue #26), together with any module in `modules` that
+   * throws while registering.
+   */
+  refusals?: readonly ModuleRefusal[];
+  /**
+   * Directories a tool may read (issue #37). Every path argument of every
+   * tool — the floor's and a module's — is refused if it has a `..` segment
+   * or is Windows-style on a POSIX host, and otherwise resolved with
+   * `realpath` and refused unless it lies inside one of these, so a symlink
+   * cannot lead out. **Absent, the server is still confined**: to
+   * `COGNIUM_MCP_ALLOWED_ROOTS` when that is set, else to the working
+   * directory. `'*'` (or `COGNIUM_MCP_ALLOWED_ROOTS=*`) is the explicit
+   * opt-out. An empty list refuses every path.
+   */
+  allowedRoots?: AllowedRoots;
+}
+
+/**
+ * Wrap `registerTool` so every tool's callback sees its path arguments
+ * checked against the allowed roots first. Installed before any tool is
+ * registered, so a module's tools are covered as well as the floor's.
+ */
+function confineTools(server: McpServer, guard: RootGuard): void {
+  const register = server.registerTool.bind(server) as (...a: unknown[]) => unknown;
+  (server as unknown as { registerTool: (...a: unknown[]) => unknown }).registerTool = (
+    name: unknown,
+    config: unknown,
+    cb: unknown,
+  ) => {
+    const hasInput = typeof config === 'object' && config !== null && 'inputSchema' in config;
+    if (!hasInput || typeof cb !== 'function') return register(name, config, cb);
+    const fn = cb as (args: unknown, extra: unknown) => unknown;
+    return register(name, config, (args: unknown, extra: unknown) => {
+      const checked = guard.apply(args);
+      if ('error' in checked) return errorResult(checked.error);
+      return fn(checked.args, extra);
+    });
+  };
 }
 
 export function buildServer(opts: BuildServerOptions = {}): McpServer {
   const cache = new ProjectCache(opts.cacheCapacity ?? 3);
+  const guard = new RootGuard(resolveAllowedRoots(opts.allowedRoots));
   const ctx: ToolContext = {
     cache,
     enablement: opts.enablement ?? floorEnablement(),
-    ...(opts.allowedRoots ? { allowedRoots: opts.allowedRoots } : {}),
+    ...(guard.unconfined ? {} : { allowedRoots: guard.roots }),
   };
 
   const server = new McpServer(IDENTITY);
+  confineTools(server, guard);
 
   server.registerTool('scan', scanConfig, makeScanHandler(ctx) as never);
   server.registerTool('explain_finding', explainFindingConfig, makeExplainFindingHandler(ctx) as never);
@@ -122,15 +166,28 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   // module: the tools it managed to register stay, the rest do not arrive,
   // and the server keeps serving. Losing the floor because an optional
   // extra misbehaved would be the worse outcome.
+  const loaded: ToolModule[] = [];
+  const refused: ModuleRefusal[] = [...(opts.refusals ?? [])];
   for (const mod of opts.modules ?? []) {
     try {
       mod.register(server, ctx);
+      loaded.push(mod);
     } catch (err) {
-      process.stderr.write(
-        `[${SERVER_NAME}] module ${mod.id}@${mod.version} failed to register: ${(err as Error).message}\n`,
-      );
+      const reason = `${mod.id}@${mod.version} failed to register: ${(err as Error).message}`;
+      process.stderr.write(`[${SERVER_NAME}] module ${reason}\n`);
+      refused.push({ specifier: mod.id, reason, id: mod.id, version: mod.version });
     }
   }
+
+  // Tell the client, not only stderr, which modules loaded and which were
+  // refused (issue #26). Both ride on the `initialize` result and on
+  // `server/discover`, so either protocol era sees them.
+  const status = moduleStatus(circleIrVersion(), loaded, refused);
+  server.server.registerCapabilities({
+    experimental: { [MODULES_CAPABILITY]: JSON.parse(JSON.stringify(status)) as never },
+  });
+  const instructions = statusInstructions(status);
+  if (instructions !== undefined) setInstructions(server, instructions);
 
   // Whatever transport a host connects — stdio here, streamable HTTP in a
   // host of its own — a request with malformed parameters gets the reserved
@@ -143,6 +200,17 @@ export function buildServer(opts: BuildServerOptions = {}): McpServer {
   };
 
   return server;
+}
+
+/**
+ * Set the `instructions` the server returns from `initialize` and
+ * `server/discover`. The SDK takes them only as a constructor option, but
+ * whether a module registers is known only after the server exists; the SDK
+ * reads the field when it answers, so setting it before `connect` is enough.
+ * `tests/module-status.test.ts` holds this against the real SDK.
+ */
+function setInstructions(server: McpServer, text: string): void {
+  (server.server as unknown as { _instructions?: string })._instructions = text;
 }
 
 export interface Discovery {
@@ -183,12 +251,13 @@ export function resetDiscoveryForTests(): void {
  * install has, with enablement computed once.
  */
 export async function createServer(
-  opts: Omit<BuildServerOptions, 'modules' | 'enablement'> = {},
+  opts: Omit<BuildServerOptions, 'modules' | 'refusals' | 'enablement'> = {},
 ): Promise<{ server: McpServer; discovery: Discovery }> {
   const found = await discoverModules();
   const server = buildServer({
     ...opts,
     modules: found.modules,
+    refusals: found.refusals,
     enablement: found.enablement,
   });
   return { server, discovery: found };
@@ -208,7 +277,7 @@ export async function createServer(
  * still works, and serves the 2025-era protocol only.
  */
 export function createHandler(
-  opts: Omit<BuildServerOptions, 'modules' | 'enablement'> & { handler?: CreateMcpHandlerOptions } = {},
+  opts: Omit<BuildServerOptions, 'modules' | 'refusals' | 'enablement'> & { handler?: CreateMcpHandlerOptions } = {},
 ): McpHttpHandler {
   const { handler, ...build } = opts;
   return createMcpHandler(async () => (await createServer(build)).server, handler);

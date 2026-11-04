@@ -7,9 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Built on `circle-ir` **4.18.1** (the 0.8.1 pin, unchanged): it carries the
-advisory matcher, Maven version order and declared-version reader this tool
-uses. A minor because one tool is added; no tool was removed or renamed and no
-input schema changed.
+advisory matcher, Maven version order and declared-version reader that
+`analyze_dependencies` uses.
+
+### Security
+
+- **Every path argument is confined to allowed roots, by default** (#37).
+  Before, every path-taking tool read any absolute directory on the host and
+  followed a symlink out of a project; mounted over HTTP with
+  `createHandler()`, a token holder could read text from any directory on the
+  server's host. Now every path argument of every tool, floor and module, is
+  checked before the tool runs: a `..` segment is refused, a Windows-style path
+  on a POSIX host (a UNC path on Windows) is refused, and everything else is
+  resolved with `realpath` and refused outside the roots, so a symlink cannot
+  escape. The roots are `allowedRoots` (on `buildServer`, `createServer`,
+  `createHandler`), else `COGNIUM_MCP_ALLOWED_ROOTS`, else the working
+  directory. `'*'` as either is the explicit opt-out. `ToolContext.allowedRoots`
+  carries the real roots to modules (absent only when unconfined).
+
+  **This changes a default.** A call that used to read a directory outside the
+  working directory is now refused with `isError` and one line naming
+  `COGNIUM_MCP_ALLOWED_ROOTS`. `buildServer()` with no options is confined
+  too; it used to be unconfined. `dependency_calls` no longer reads
+  `~/.m2/repository` unless that is inside a root (its `note` says so). Clients
+  that start servers in `/` (Claude Desktop on macOS) should set
+  `COGNIUM_MCP_ALLOWED_ROOTS`.
 
 ### Added
 
@@ -21,7 +43,20 @@ input schema changed.
   supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
   `baseline_root`, adds the advisories a change removed, added and left, and
   the dependency drift. The snapshot is indexed once per content (digest) per
-  process. Fifteen built-in tools.
+  process. Its path arguments (`project_root`, `baseline_root`, `advisory_db`,
+  `resolved[].path`) are confined to the allowed roots like every other tool's.
+  Fifteen built-in tools.
+
+- **A refused optional module is visible to the MCP client** (#26), not only on
+  stderr. `capabilities.experimental["cognium/modules"]` lists the installed
+  `circle-ir`, the modules that loaded and the modules that were refused, each
+  refusal with its reason and, for a version-skew refusal, the `circle-ir` the
+  module was built against (`builtAgainst`) next to the one the server pins
+  (`installed`). When anything was refused, `instructions` says so in one
+  paragraph. Both are in the `initialize` result and in `server/discover`. A
+  module that throws while registering is reported the same way.
+  `buildServer()` takes `refusals`; `createServer()`, `createHandler()` and the
+  stdio binary pass the loader's. No tool or schema changed.
 
 ## [0.8.1] - 2026-11-01
 

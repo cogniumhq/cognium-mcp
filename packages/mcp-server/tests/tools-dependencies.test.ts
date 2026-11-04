@@ -336,7 +336,7 @@ describe('analyze_dependencies — on the wire', () => {
   let client: Client;
 
   beforeAll(async () => {
-    const server = buildServer();
+    const server = buildServer({ allowedRoots: [tmp, FIX] });
     const [c, s] = InMemoryTransport.createLinkedPair();
     await server.connect(s);
     client = new Client({ name: 'deps', version: '0' });
