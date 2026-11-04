@@ -224,6 +224,8 @@ describe('a server with allowed roots', () => {
     ['find_dead_code', 'project_root', () => outside],
     ['find_dead_code', 'project_root', () => join(project, 'escape-link')],
     ['removal_reach', 'project_root', () => outside],
+    ['analyze_dependencies', 'project_root', () => outside],
+    ['analyze_dependencies', 'project_root', () => join(project, 'escape-link')],
     ['refresh', 'project_root', () => outside],
     ['probe_read', 'project_root', () => outside],
   ])('%s refuses %s outside the root and leaks nothing', async (name, key, value) => {
@@ -263,6 +265,21 @@ describe('a server with allowed roots', () => {
     const r = (await client.callTool({
       name: 'removal_reach',
       arguments: { project_root: project, baseline_root: outside },
+    })) as Result;
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/outside the allowed roots/);
+    expect(JSON.stringify(r)).not.toContain(MARKER);
+  });
+
+  it.each([
+    ['baseline_root', () => ({ baseline_root: outside })],
+    ['advisory_db', () => ({ advisory_db: outside })],
+    ['advisory_db', () => ({ advisory_db: join(project, 'escape-link') })],
+    ['resolved[0].path', () => ({ resolved: [{ path: join(outside, 'secret.js'), kind: 'maven-dependency-list' }] })],
+  ])('analyze_dependencies refuses %s outside the root', async (_key, args) => {
+    const r = (await client.callTool({
+      name: 'analyze_dependencies',
+      arguments: { project_root: project, ...args() },
     })) as Result;
     expect(r.isError).toBe(true);
     expect(r.content[0].text).toMatch(/outside the allowed roots/);

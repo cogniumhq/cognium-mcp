@@ -1,0 +1,9 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+io.netty:netty-buffer:4.1.100.Final=compileClasspath,runtimeClasspath
+io.netty:netty-codec-http:4.1.100.Final=compileClasspath,runtimeClasspath
+junit:junit:4.13.2=testCompileClasspath,testRuntimeClasspath
+org.hamcrest:hamcrest-core:1.3=testCompileClasspath,testRuntimeClasspath
+org.yaml:snakeyaml:1.33=compileClasspath,runtimeClasspath
+empty=annotationProcessor

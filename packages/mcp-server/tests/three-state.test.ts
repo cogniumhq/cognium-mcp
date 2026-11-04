@@ -37,6 +37,7 @@ const FLOOR_TOOLS = [
   'dependency_calls',
   'find_dead_code',
   'removal_reach',
+  'analyze_dependencies',
   'refresh',
 ];
 
