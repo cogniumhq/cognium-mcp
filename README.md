@@ -41,8 +41,10 @@ the [package README](./packages/mcp-server/README.md).
 ## What this repository promises
 
 The tool list and its schemas are the API. A removed or renamed tool, or a
-changed schema, is a major version; a new tool or field is a minor. CI holds
-that, and the other promises, as separate checks:
+changed schema, is a major version; a new tool or field is a minor. A first
+`outputSchema` on a tool that had none counts as a new field; once declared,
+removing or changing it is a major. CI holds that, and the other promises, as
+separate checks:
 
 | Check | Holds |
 |---|---|
