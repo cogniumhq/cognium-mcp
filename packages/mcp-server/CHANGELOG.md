@@ -35,6 +35,25 @@ advisory matcher, Maven version order and declared-version reader that
 
 ### Added
 
+- **`analyze_dependencies` reads Eclipse/Tycho target platforms** (`*.target`).
+  On a Tycho build the third-party versions are `<location type="Maven">`
+  entries of a target definition, not pom `<dependency>` rows, so a tree such
+  as iDempiere's `org.idempiere.p2.targetplatform` resolved to no third-party
+  coordinate and matched no advisory. Every `*.target` file with a Maven
+  location is now a manifest of its own in `resolution[]` (`kind: "declared"`,
+  `transitive: false`); its coordinates (flat and `<dependencies>` forms) carry
+  `declared.origin: "target-location"` with the target file as `file`. Comments
+  and CDATA are ignored, other location types are skipped, and a `${…}`
+  version is `unknown` (counted in `unresolved`, never matched). The rules are
+  circle-ir's `parseTychoTargetDependencies` (cognium-dev #1077), read here
+  until a released `circle-ir` exports it.
+
+  **Consumer Impact.** On a tree with `*.target` files, `resolution[]` gains
+  one row per target file, `dependencies[]` and `matches[]` gain the target's
+  coordinates, and `declared.origin` takes the new value `"target-location"`.
+  A consumer that lists the known `origin` values should add it. Trees without
+  a `*.target` file answer as before, byte for byte.
+
 - **`analyze_dependencies`**, a new built-in tool (deterministic, offline,
   read-only, closed-world, with an `outputSchema`). Resolves a Java project's
   manifests (Maven, Gradle) to their dependency sets — from a Gradle lockfile

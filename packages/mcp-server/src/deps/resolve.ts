@@ -10,6 +10,11 @@
  *      run (`mvn dependency:tree|list -DoutputFile=…`)             → `resolved`;
  *   4. the build file itself (`pom.xml`, `build.gradle[.kts]`)       → `declared`.
  *
+ * Besides, every Eclipse PDE / Tycho target definition (`*.target`) with a
+ * `<location type="Maven">` is a manifest of its own, `declared`: on a Tycho
+ * build the third-party versions live there, not in pom rows (cognium-dev
+ * #1077). Its entries carry `declared.origin: "target-location"`.
+ *
  * Nothing here runs a build or opens a connection: every input is a file
  * already in the tree (or named by the caller).
  */
@@ -28,6 +33,7 @@ import {
   type PomFile,
 } from 'circle-ir';
 import { SKIPPED_DIRECTORIES } from '../util/files.js';
+import { isTychoTarget, parseTychoTarget } from './tycho-target.js';
 
 export type ResolvedKind = 'maven-dependency-tree' | 'maven-dependency-list' | 'gradle-lockfile' | 'cyclonedx-json';
 
@@ -50,7 +56,7 @@ export interface ResolutionEntry {
 }
 
 /** `declared` as the tool reports it; Gradle literals are added beside the Maven origins. */
-export type Declared = (Omit<DeclaredVersion, 'origin'> & { origin: DeclaredVersion['origin'] | 'gradle-literal' }) | null;
+export type Declared = (Omit<DeclaredVersion, 'origin'> & { origin: DeclaredVersion['origin'] | 'gradle-literal' | 'target-location' }) | null;
 
 /** One coordinate as found in one manifest. */
 export interface ManifestDep {
@@ -82,8 +88,9 @@ const OTHER_ECOSYSTEMS: Record<string, string> = {
 
 const posix = (p: string): string => p.split(sep).join('/');
 
-function walk(root: string): { dirs: string[]; poms: PomFile[]; seen: Set<string> } {
+function walk(root: string): { dirs: string[]; poms: PomFile[]; targets: string[]; seen: Set<string> } {
   const dirs: string[] = [];
+  const targets: string[] = [];
   const poms: PomFile[] = [];
   const seen = new Set<string>();
   const visit = (dir: string, depth: number): void => {
@@ -98,6 +105,7 @@ function walk(root: string): { dirs: string[]; poms: PomFile[]; seen: Set<string
     if (BUILD_FILES.some((b) => names.has(b)) || names.has('gradle.lockfile')) dirs.push(dir);
     if (names.has('pom.xml')) poms.push({ path: posix(relative(root, join(dir, 'pom.xml'))), content: readFileSync(join(dir, 'pom.xml'), 'utf8') });
     for (const n of names) if (OTHER_ECOSYSTEMS[n]) seen.add(OTHER_ECOSYSTEMS[n]);
+    for (const n of names) if (isTychoTarget(n)) targets.push(join(dir, n));
     for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       if (!e.isDirectory()) continue;
       if (SKIPPED_DIRECTORIES.includes(e.name) || EXTRA_SKIPS.has(e.name) || e.name.startsWith('.')) continue;
@@ -105,7 +113,7 @@ function walk(root: string): { dirs: string[]; poms: PomFile[]; seen: Set<string
     }
   };
   visit(root, 0);
-  return { dirs: dirs.sort(), poms, seen };
+  return { dirs: dirs.sort(), poms, targets: targets.sort(), seen };
 }
 
 function parseCycloneDx(text: string): Dependency[] {
@@ -162,7 +170,7 @@ export interface ResolveOptions {
 /** Resolve the tree at `root`. Paths in the answer are relative to it. */
 export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolution {
   const root = resolve(rootIn);
-  const { dirs, poms, seen } = walk(root);
+  const { dirs, poms, targets, seen } = walk(root);
   const declaredIndex = poms.length > 0 ? new MavenDeclaredIndex(poms) : undefined;
   const explicit = (opts.resolved ?? []).filter((r) => (r.side ?? 'head') === opts.side);
   const resolution: ResolutionEntry[] = [];
@@ -243,7 +251,23 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
     resolution.push({ manifest, kind, input, dependencies: kept, unresolved, excludedDev, transitive: kind !== 'declared' });
   }
 
-  const ecosystemsSeen = [...new Set([...(dirs.length > 0 ? ['Maven'] : []), ...seen])].sort();
+  // Tycho target definitions: one `declared` manifest per file with a Maven location.
+  for (const file of targets) {
+    const manifest = posix(relative(root, file));
+    const found = parseTychoTarget(readFileSync(file, 'utf8'));
+    if (found.length === 0) continue;
+    let unresolved = 0;
+    for (const d of found) {
+      const concrete = isConcreteVersion(d.version);
+      if (!concrete) unresolved++;
+      const declared: Declared = concrete ? { version: d.version, origin: 'target-location', file: manifest } : null;
+      deps.push({ dep: d, manifest, declared });
+    }
+    resolution.push({ manifest, kind: 'declared', input: manifest, dependencies: found.length, unresolved, excludedDev: 0, transitive: false });
+  }
+
+  const mavenSeen = dirs.length > 0 || resolution.some((r) => isTychoTarget(r.manifest.split('/').pop() ?? ''));
+  const ecosystemsSeen = [...new Set([...(mavenSeen ? ['Maven'] : []), ...seen])].sort();
   const ecosystemsCovered = ecosystemsSeen.filter((e) => e === 'Maven');
   return {
     root,
