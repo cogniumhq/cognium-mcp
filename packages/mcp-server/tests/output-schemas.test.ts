@@ -16,6 +16,7 @@ import { buildServer } from '../src/server.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const javaRoot = resolve(here, 'fixtures/navigation/project');
+const mavenRoot = resolve(here, 'fixtures/dependencies/maven-multi');
 
 let root: string;
 let client: Client;
@@ -36,7 +37,7 @@ beforeAll(async () => {
       '',
     ].join('\n'),
   );
-  const server = buildServer({ allowedRoots: [root, javaRoot] });
+  const server = buildServer({ allowedRoots: [root, javaRoot, mavenRoot] });
   const [c, s] = InMemoryTransport.createLinkedPair();
   await server.connect(s);
   client = new Client({ name: 'output-schemas', version: '0' });
@@ -69,7 +70,19 @@ describe('outputSchema on every tool', () => {
     ['find_callees', () => ({ project_root: javaRoot, symbol: 'app.Caller.run' })],
     ['refresh', () => ({ project_root: root })],
     ['refresh', () => ({})],
+    ['analyze_dependencies', () => ({ project_root: mavenRoot })],
   ];
+
+  // Called in a test of their own below or in their own suite, through the
+  // SDK client, which validates structuredContent against the schema.
+  const coveredElsewhere = new Set(['explain_finding', 'find_similar', 'dependency_calls']);
+
+  it('every listed tool is called here or in its own SDK-validated test', async () => {
+    const { tools } = await client.listTools();
+    const called = new Set(calls.map(([name]) => name));
+    const uncovered = tools.map((t) => t.name).filter((name) => !called.has(name) && !coveredElsewhere.has(name));
+    expect(uncovered).toEqual([]);
+  });
 
   it.each(calls)('%s returns structuredContent equal to its JSON text', async (name, args) => {
     const r = (await client.callTool({ name, arguments: args() })) as {

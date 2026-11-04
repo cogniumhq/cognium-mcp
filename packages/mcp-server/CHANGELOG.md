@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Built on `circle-ir` **4.18.1** (the 0.8.1 pin, unchanged): it carries the
+advisory matcher, Maven version order and declared-version reader that
+`analyze_dependencies` uses.
+
 ### Security
 
 - **Every path argument is confined to allowed roots, by default** (#37).
@@ -31,19 +35,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`analyze_dependencies`**, a new built-in tool (deterministic, offline,
+  read-only, closed-world, with an `outputSchema`). Resolves a Java project's
+  manifests (Maven, Gradle) to their dependency sets — from a Gradle lockfile
+  or Maven `dependency:tree` / `dependency:list` output when present, else the
+  build file — and matches them against an OSV advisory snapshot the caller
+  supplies (default `<project_root>/.cognium/advisory/osv-maven`). With
+  `baseline_root`, adds the advisories a change removed, added and left, and
+  the dependency drift. The snapshot is indexed once per content (digest) per
+  process. Its path arguments (`project_root`, `baseline_root`, `advisory_db`,
+  `resolved[].path`) are confined to the allowed roots like every other tool's.
+  Fifteen built-in tools.
+
 - **Every tool declares an `outputSchema` and returns `structuredContent`**
-  (#38). `dependency_calls` already did; the other thirteen now do too
-  (`src/tools/output-shapes.ts`). `textResult` builds `structuredContent` by
-  parsing the JSON text it just wrote, so the two are the same object and a
-  field left `undefined` is absent from both. The schemas pin each tool's
+  (#38). `dependency_calls` and `analyze_dependencies` already did; the other
+  thirteen now do too (`src/tools/output-shapes.ts`). `textResult` builds
+  `structuredContent` by parsing the JSON text it just wrote, so the two are
+  the same object and a field left `undefined` is absent from both. The schemas pin each tool's
   top-level envelope and leave nested engine objects open. Error results are
   unchanged: text only, `isError: true`.
 
-  **The publish gate counts this as a major.** `verify-install.mjs` compares
-  `outputSchema` like `inputSchema`, and 0.8.1 declares none for these
-  thirteen tools, so each reports "has a different outputSchema". Releasing
-  this needs either 1.0.0 or a deliberate change to the gate that treats an
-  `outputSchema` appearing where there was none as an addition.
+  **A minor, not a major.** No tool's `inputSchema` changed and the text
+  result is byte-identical; a client that ignores `outputSchema` sees only the
+  new `structuredContent` field. The install check counts a first
+  `outputSchema` on a tool that had none as an addition (#47). From here on
+  these envelopes are API: removing or changing one is a major.
 
 - **A refused optional module is visible to the MCP client** (#26), not only on
   stderr. `capabilities.experimental["cognium/modules"]` lists the installed

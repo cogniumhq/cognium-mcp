@@ -1,0 +1,7 @@
+plugins { id 'java' }
+dependencyLocking { lockAllConfigurations() }
+dependencies {
+    implementation 'org.yaml:snakeyaml:1.33'
+    implementation 'io.netty:netty-codec-http:4.1.100.Final'
+    testImplementation 'junit:junit:4.13.2'
+}

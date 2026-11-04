@@ -17,6 +17,7 @@ const EXPECTED_TOOLS = [
   'attack_surface_summary',
   'list_reachable_sinks',
   'find_similar',
+  'analyze_dependencies',
   'refresh',
 ];
 
