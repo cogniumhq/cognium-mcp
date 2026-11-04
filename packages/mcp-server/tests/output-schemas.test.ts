@@ -17,6 +17,8 @@ import { buildServer } from '../src/server.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const javaRoot = resolve(here, 'fixtures/navigation/project');
 const mavenRoot = resolve(here, 'fixtures/dependencies/maven-multi');
+const graphBase = resolve(here, 'fixtures/graph-facts/base');
+const graphHead = resolve(here, 'fixtures/graph-facts/head');
 
 let root: string;
 let client: Client;
@@ -37,7 +39,7 @@ beforeAll(async () => {
       '',
     ].join('\n'),
   );
-  const server = buildServer({ allowedRoots: [root, javaRoot, mavenRoot] });
+  const server = buildServer({ allowedRoots: [root, javaRoot, mavenRoot, graphBase, graphHead] });
   const [c, s] = InMemoryTransport.createLinkedPair();
   await server.connect(s);
   client = new Client({ name: 'output-schemas', version: '0' });
@@ -71,6 +73,8 @@ describe('outputSchema on every tool', () => {
     ['refresh', () => ({ project_root: root })],
     ['refresh', () => ({})],
     ['analyze_dependencies', () => ({ project_root: mavenRoot })],
+    ['find_dead_code', () => ({ project_root: graphBase })],
+    ['removal_reach', () => ({ project_root: graphHead, baseline_root: graphBase })],
   ];
 
   // Called in a test of their own below or in their own suite, through the

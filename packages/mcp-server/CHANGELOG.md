@@ -48,8 +48,8 @@ advisory matcher, Maven version order and declared-version reader that
   Fifteen built-in tools.
 
 - **Every tool declares an `outputSchema` and returns `structuredContent`**
-  (#38). `dependency_calls` and `analyze_dependencies` already did; the other
-  thirteen now do too (`src/tools/output-shapes.ts`). `textResult` builds
+  (#38). `dependency_calls`, `analyze_dependencies`, `find_dead_code` and
+  `removal_reach` already did; the other thirteen now do too (`src/tools/output-shapes.ts`). `textResult` builds
   `structuredContent` by parsing the JSON text it just wrote, so the two are
   the same object and a field left `undefined` is absent from both. The schemas pin each tool's
   top-level envelope and leave nested engine objects open. Error results are
@@ -58,7 +58,9 @@ advisory matcher, Maven version order and declared-version reader that
   **A minor, not a major.** No tool's `inputSchema` changed and the text
   result is byte-identical; a client that ignores `outputSchema` sees only the
   new `structuredContent` field. The install check counts a first
-  `outputSchema` on a tool that had none as an addition (#47). From here on
+  `outputSchema` on a tool that had none as an addition (#47). The install
+  check also reads `tools/list` across several stdout chunks now: with every
+  schema declared the reply is past the 64 KiB pipe buffer. From here on
   these envelopes are API: removing or changing one is a major.
 
 - **A refused optional module is visible to the MCP client** (#26), not only on
