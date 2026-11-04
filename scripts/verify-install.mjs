@@ -114,7 +114,11 @@ function serve(dir) {
     child.stderr.on('data', (chunk) => (stderr += chunk));
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
-      const messages = stdout.split('\n').filter((line) => line.trim() !== '').map((line) => JSON.parse(line));
+      // A message can arrive over several chunks (tools/list is past the 64 KiB
+      // pipe buffer once every tool has an outputSchema): parse only the lines
+      // that are complete, i.e. followed by a newline.
+      const complete = stdout.slice(0, stdout.lastIndexOf('\n') + 1);
+      const messages = complete.split('\n').filter((line) => line.trim() !== '').map((line) => JSON.parse(line));
       const init = messages.find((m) => m.id === 1);
       const list = messages.find((m) => m.id === 2);
       if (init && list) {

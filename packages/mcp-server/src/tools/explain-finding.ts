@@ -8,6 +8,7 @@ import { RULE_DEFINITIONS, type SinkType } from 'circle-ir';
 import { resolve } from 'path';
 import type { ToolContext, ToolResult } from './types.js';
 import { textResult, errorResult, READ_ONLY_ANNOTATIONS } from './types.js';
+import { explainFindingOutputShape } from './output-shapes.js';
 import { truncateString } from '../util/serialize.js';
 
 export const explainFindingInputShape = {
@@ -22,6 +23,7 @@ export const explainFindingConfig = {
     'CVSS-like score), source-code snippet, and — if the finding is a taint sink — the list of sanitizers ' +
     'that would neutralize it. Use before proposing a fix so the LLM cites authoritative rule content.',
   inputSchema: explainFindingInputShape,
+  outputSchema: explainFindingOutputShape,
   annotations: READ_ONLY_ANNOTATIONS,
 } as const;
 
