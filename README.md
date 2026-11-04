@@ -13,7 +13,7 @@ The Cognium MCP server and the editor plugins that use it.
 npx -y @cognium/mcp-server
 ```
 
-It speaks MCP over stdio and serves fifteen deterministic static-analysis tools
+It speaks MCP over stdio and serves seventeen deterministic static-analysis tools
 built on [`circle-ir`](https://www.npmjs.com/package/circle-ir): scan a project,
 list entry points and reachable sinks, trace taint paths, explain a finding,
 check a sanitizer. No API key, no network, no model.
@@ -32,7 +32,7 @@ Optional tool modules are loaded when they are installed next to the server.
 [`circle-ir-ai`](https://www.npmjs.com/package/circle-ir-ai) ships one,
 `circle-ir-ai/mcp`, which adds ten more tools. A module built against a
 different `circle-ir` minor is refused, on stderr and to the client (the
-server's capabilities and `instructions`), and the fifteen
+server's capabilities and `instructions`), and the seventeen
 built-in tools keep serving.
 
 Client configuration, the environment variables and the licence states are in
@@ -41,8 +41,10 @@ the [package README](./packages/mcp-server/README.md).
 ## What this repository promises
 
 The tool list and its schemas are the API. A removed or renamed tool, or a
-changed schema, is a major version; a new tool or field is a minor. CI holds
-that, and the other promises, as separate checks:
+changed schema, is a major version; a new tool or field is a minor. A first
+`outputSchema` on a tool that had none counts as a new field; once declared,
+removing or changing it is a major. CI holds that, and the other promises, as
+separate checks:
 
 | Check | Holds |
 |---|---|

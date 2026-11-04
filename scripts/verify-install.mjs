@@ -13,8 +13,13 @@
  * its schemas are this package's API, so against the baseline:
  *
  *   - a tool that is gone or renamed fails;
- *   - a tool whose input or output schema changed fails;
+ *   - a tool whose input schema changed fails;
+ *   - a tool whose output schema changed or was removed fails;
  *   - a new tool is reported and passes (a minor);
+ *   - a tool that had no output schema and now declares one is reported and
+ *     passes (a minor). It adds a field: the text result is unchanged, and a
+ *     client that ignores `outputSchema` sees no difference. Once declared,
+ *     that schema is API like any other, so a later change to it fails;
  *   - a changed title or description passes (a patch);
  *   - a schema that says the same thing in another JSON Schema dialect —
  *     only `$schema` and the order of keys differ — is reported and passes.
@@ -155,10 +160,12 @@ function withoutDialect(schema) {
 
 /**
  * Compare a tool list against a baseline.
- * Returns { breaking, additions, dialects }.
+ * Returns { breaking, additions, declared, dialects }: `additions` are new
+ * tools, `declared` are existing tools that now declare a first outputSchema.
  */
 export function compareTools(baseline, candidate) {
   const breaking = [];
+  const declared = [];
   const dialects = [];
   const byName = new Map(candidate.map((tool) => [tool.name, tool]));
   for (const before of baseline) {
@@ -171,6 +178,12 @@ export function compareTools(baseline, candidate) {
       const a = JSON.stringify(canonical(before[key]));
       const b = JSON.stringify(canonical(after[key]));
       if (a === b) continue;
+      if (key === 'outputSchema' && before[key] === undefined) {
+        // Absent → present adds a field (a minor). Present → absent falls
+        // through and is breaking, like any other change to a declared schema.
+        declared.push(before.name);
+        continue;
+      }
       const sameContent =
         JSON.stringify(canonical(withoutDialect(before[key]))) === JSON.stringify(canonical(withoutDialect(after[key])));
       if (sameContent) {
@@ -182,7 +195,7 @@ export function compareTools(baseline, candidate) {
   }
   const known = new Set(baseline.map((tool) => tool.name));
   const additions = candidate.filter((tool) => !known.has(tool.name)).map((tool) => tool.name);
-  return { breaking, additions, dialects };
+  return { breaking, additions, declared, dialects };
 }
 
 async function inspect(spec) {
@@ -215,8 +228,9 @@ async function main(argv) {
   if (!baselineSpec) return EXIT.ok;
 
   const baseline = await inspect(baselineSpec);
-  const { breaking, additions, dialects } = compareTools(baseline.tools, candidate.tools);
+  const { breaking, additions, declared, dialects } = compareTools(baseline.tools, candidate.tools);
   for (const name of additions) console.log(`new tool (a minor): ${name}`);
+  for (const name of declared) console.log(`now declares an outputSchema (a minor): ${name}`);
   if (dialects.length > 0) {
     console.log(`same schemas, another JSON Schema dialect (${dialects.length} of them) — say so in the changelog:`);
     console.log(`  e.g. ${dialects[0]}`);

@@ -221,6 +221,9 @@ describe('a server with allowed roots', () => {
     ['find_callers', 'project_root', () => outside],
     ['find_callees', 'project_root', () => join(project, 'escape-link')],
     ['dependency_calls', 'project_root', () => outside],
+    ['find_dead_code', 'project_root', () => outside],
+    ['find_dead_code', 'project_root', () => join(project, 'escape-link')],
+    ['removal_reach', 'project_root', () => outside],
     ['analyze_dependencies', 'project_root', () => outside],
     ['analyze_dependencies', 'project_root', () => join(project, 'escape-link')],
     ['refresh', 'project_root', () => outside],
@@ -232,6 +235,7 @@ describe('a server with allowed roots', () => {
       find_callers: { symbol: 'a.B.c' },
       find_callees: { symbol: 'a.B.c' },
       dependency_calls: { artifact: 'g:a:1' },
+      removal_reach: { baseline_root: project },
     };
     const r = (await client.callTool({
       name,
@@ -255,6 +259,16 @@ describe('a server with allowed roots', () => {
     })) as Result;
     expect(r.isError).toBe(true);
     expect(r.content[0].text).toMatch(/outside the allowed roots/);
+  });
+
+  it('removal_reach refuses a baseline_root outside the root', async () => {
+    const r = (await client.callTool({
+      name: 'removal_reach',
+      arguments: { project_root: project, baseline_root: outside },
+    })) as Result;
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/outside the allowed roots/);
+    expect(JSON.stringify(r)).not.toContain(MARKER);
   });
 
   it.each([
