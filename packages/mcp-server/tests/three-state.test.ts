@@ -35,6 +35,7 @@ const FLOOR_TOOLS = [
   'find_callers',
   'find_callees',
   'dependency_calls',
+  'analyze_dependencies',
   'refresh',
 ];
 
