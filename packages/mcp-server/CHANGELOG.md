@@ -6,9 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Built on `circle-ir` **4.18.1** (the 0.8.1 pin, unchanged): it carries the
-advisory matcher, Maven version order and declared-version reader that
-`analyze_dependencies` uses.
+## [0.9.0] - 2026-11-06
+
+Tested against `circle-ir` **4.20.0** (was 4.18.1; 4.19.0 is skipped). The
+optional module to pair it with is `circle-ir-ai` **4.31.0**, built on 4.20.0
+(the release train: `npm run check:train`). A minor: three new tools
+(`analyze_dependencies`, `find_dead_code`, `removal_reach`), an `outputSchema`
+and `structuredContent` on every tool, and path confinement by default (a
+changed default, see Security). 4.20.0 still carries the advisory matcher,
+Maven version order and declared-version reader that `analyze_dependencies`
+uses.
+
+### Changed
+
+- **`circle-ir` pin 4.18.1 → 4.20.0** (exact). The engine's public API change is
+  additive. Answers change with it: circle-ir 4.19.0 and 4.20.0 clear many
+  false-positive classes and add true positives (circle-ir CHANGELOG), Java
+  dead code is narrower (cognium-dev #1092, #1093), and `fileTimeoutMs` is now
+  checked after each extraction phase (#1007), so a file that used to finish
+  can time out. `@cognium/code-facts` 0.1.0 needs `circle-ir` `>=4.18.0`, so a
+  single `circle-ir` is still installed. circle-ir 4.20.0 also declares an
+  optional dependency, `apache-arrow` 21.1.0, so a default install now pulls it
+  and its dependencies too; `npm install --omit=optional` leaves it out.
+- **Optional peer `circle-ir-ai` `>=4.30.0` → `>=4.31.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai 4.30.0 (on
+  4.18.1) would silently drop the module's tools. **Upgrade circle-ir-ai to
+  4.31.0 together with the server.**
 
 ### Security
 
