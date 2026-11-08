@@ -7,12 +7,29 @@
  */
 
 import { createRequire } from 'node:module';
-import { McpServer, createMcpHandler, type CreateMcpHandlerOptions, type McpHttpHandler } from '@modelcontextprotocol/server';
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  McpServer,
+  createMcpHandler,
+  inputRequired,
+  isInputRequiredResult,
+  type ClientCapabilities,
+  type CreateMcpHandlerOptions,
+  type McpHttpHandler,
+} from '@modelcontextprotocol/server';
 import { ProjectCache } from './cache.js';
 import type { ToolContext } from './tools/types.js';
 import { registerResources } from './resources/index.js';
 import { guardParams } from './params-guard.js';
-import { RootGuard, resolveAllowedRoots, type AllowedRoots } from './roots.js';
+import {
+  activeGuard,
+  effectiveGuard,
+  resolveAllowedRoots,
+  rootPathsFromList,
+  withGuard,
+  type AllowedRoots,
+  type ClientRootsPolicy,
+} from './roots.js';
 import { errorResult } from './tools/types.js';
 import { floorEnablement, enablementForProcess, type Enablement } from './enablement.js';
 import {
@@ -103,24 +120,92 @@ export interface BuildServerOptions {
    */
   refusals?: readonly ModuleRefusal[];
   /**
-   * Directories a tool may read (issue #37). Every path argument of every
-   * tool — the floor's and a module's — is refused if it has a `..` segment
-   * or is Windows-style on a POSIX host, and otherwise resolved with
-   * `realpath` and refused unless it lies inside one of these, so a symlink
-   * cannot lead out. **Absent, the server is still confined**: to
-   * `COGNIUM_MCP_ALLOWED_ROOTS` when that is set, else to the working
-   * directory. `'*'` (or `COGNIUM_MCP_ALLOWED_ROOTS=*`) is the explicit
-   * opt-out. An empty list refuses every path.
+   * Directories a tool may read (issue #37, S5): the *configured* roots.
+   * Every path argument of every tool — the floor's and a module's — is
+   * refused if it has a `..` segment or is Windows-style on a POSIX host,
+   * and otherwise resolved with `realpath` and refused unless it lies inside
+   * an allowed root, so a symlink cannot lead out. Absent, the configured
+   * roots are `COGNIUM_MCP_ALLOWED_ROOTS`; absent both, **there are none**:
+   * the working directory is never a root, and every path is refused unless
+   * the client's MCP roots stand in (see `clientRoots`). `'*'` (or
+   * `COGNIUM_MCP_ALLOWED_ROOTS=*`) is the explicit opt-out. An empty list
+   * refuses every path.
+   *
+   * When the client declares the `roots` capability, its MCP roots narrow
+   * these: a tool may read only the part of the client's roots that lies
+   * inside a configured root.
    */
   allowedRoots?: AllowedRoots;
+  /**
+   * What the client's MCP roots may do when no root is configured.
+   * `'narrow'` (the default): nothing — they only ever narrow configured
+   * roots, so with none configured every path is refused. `'establish'`:
+   * they are the allowed roots. The stdio binary uses `'establish'`, since
+   * its client is the user's own; `createHandler()` leaves the default,
+   * since an HTTP client's roots name directories on the client's machine.
+   */
+  clientRoots?: ClientRootsPolicy;
 }
+
+/** The key the server's `roots/list` input request goes under (protocol revision 2026-07-28). */
+export const ROOTS_INPUT = 'cognium/roots';
+
+/** How long a 2025-era `roots/list` request may take before the call goes on without the client's roots. */
+const ROOTS_TIMEOUT_MS = 10_000;
+
+/** What the SDK hands a tool callback about the request, as far as roots are concerned. */
+interface CallExtra {
+  mcpReq?: {
+    id?: string | number;
+    envelope?: Record<string, unknown>;
+    inputResponses?: Record<string, unknown>;
+  };
+}
+
+const ASK = Symbol('ask the client for its roots');
+
+/**
+ * The client's MCP roots for one call, as paths: `undefined` when it does
+ * not declare the `roots` capability or names no usable root; `ASK` when the
+ * call has to come back with them first (protocol revision 2026-07-28).
+ *
+ * - 2025-era connections: one `roots/list` request to the client per call,
+ *   so a root the user adds or removes counts from the next call on. If the
+ *   client does not answer, the call goes on with the configured roots.
+ * - 2026-07-28 requests: there is no server-to-client request channel, so
+ *   the roots come back in the retried request's `inputResponses`.
+ */
+async function clientRoots(server: McpServer, extra: CallExtra | undefined): Promise<readonly string[] | undefined | typeof ASK> {
+  const envelope = extra?.mcpReq?.envelope;
+  const caps = envelope
+    ? (envelope[CLIENT_CAPABILITIES_META_KEY] as ClientCapabilities | undefined)
+    : server.server.getClientCapabilities();
+  if (!caps?.roots) return undefined;
+  const usable = (paths: string[]) => (paths.length > 0 ? paths : undefined);
+  const answered = extra?.mcpReq?.inputResponses?.[ROOTS_INPUT];
+  if (answered !== undefined) return usable(rootPathsFromList(answered));
+  if (envelope) return ASK;
+  try {
+    const list = await server.server.listRoots(undefined, {
+      timeout: ROOTS_TIMEOUT_MS,
+      ...(extra?.mcpReq?.id !== undefined ? { relatedRequestId: extra.mcpReq.id } : {}),
+    });
+    return usable(rootPathsFromList(list));
+  } catch {
+    return undefined;
+  }
+}
+
+const rootsRequest = () => ({ [ROOTS_INPUT]: inputRequired.listRoots() });
 
 /**
  * Wrap `registerTool` so every tool's callback sees its path arguments
- * checked against the allowed roots first. Installed before any tool is
- * registered, so a module's tools are covered as well as the floor's.
+ * checked against the allowed roots of the call first, and runs under that
+ * call's guard (so what it reads on its own, and `ctx.allowedRoots`, follow
+ * the same roots). Installed before any tool is registered, so a module's
+ * tools are covered as well as the floor's.
  */
-function confineTools(server: McpServer, guard: RootGuard): void {
+function confineTools(server: McpServer, configured: AllowedRoots | undefined, policy: ClientRootsPolicy): void {
   const register = server.registerTool.bind(server) as (...a: unknown[]) => unknown;
   (server as unknown as { registerTool: (...a: unknown[]) => unknown }).registerTool = (
     name: unknown,
@@ -130,25 +215,42 @@ function confineTools(server: McpServer, guard: RootGuard): void {
     const hasInput = typeof config === 'object' && config !== null && 'inputSchema' in config;
     if (!hasInput || typeof cb !== 'function') return register(name, config, cb);
     const fn = cb as (args: unknown, extra: unknown) => unknown;
-    return register(name, config, (args: unknown, extra: unknown) => {
+    return register(name, config, async (args: unknown, extra: unknown) => {
+      const client = await clientRoots(server, extra as CallExtra | undefined);
+      if (client === ASK) return inputRequired({ inputRequests: rootsRequest() });
+      const guard = effectiveGuard(configured, client, policy);
       const checked = guard.apply(args);
       if ('error' in checked) return errorResult(checked.error);
-      return fn(checked.args, extra);
+      const result = await withGuard(guard, () => fn(checked.args, extra));
+      // A tool that asks the client for input of its own (2026-07-28) asks
+      // for the roots again in the same round, so the retry carries both.
+      if (client !== undefined && (extra as CallExtra | undefined)?.mcpReq?.envelope && isInputRequiredResult(result)) {
+        return { ...result, inputRequests: { ...(result.inputRequests ?? {}), ...rootsRequest() } };
+      }
+      return result;
     });
   };
 }
 
 export function buildServer(opts: BuildServerOptions = {}): McpServer {
   const cache = new ProjectCache(opts.cacheCapacity ?? 3);
-  const guard = new RootGuard(resolveAllowedRoots(opts.allowedRoots));
-  const ctx: ToolContext = {
-    cache,
-    enablement: opts.enablement ?? floorEnablement(),
-    ...(guard.unconfined ? {} : { allowedRoots: guard.roots }),
-  };
+  const configured = resolveAllowedRoots(opts.allowedRoots);
+  const policy = opts.clientRoots ?? 'narrow';
+  const outsideCalls = effectiveGuard(configured, undefined, policy);
+  const ctx = { cache, enablement: opts.enablement ?? floorEnablement() } as ToolContext;
+  // The roots of the call in progress: they depend on the client's MCP
+  // roots, which can change between calls. Outside a call, the configured
+  // roots.
+  Object.defineProperty(ctx, 'allowedRoots', {
+    enumerable: true,
+    get(): readonly string[] | undefined {
+      const g = activeGuard() ?? outsideCalls;
+      return g.unconfined ? undefined : g.roots;
+    },
+  });
 
   const server = new McpServer(IDENTITY);
-  confineTools(server, guard);
+  confineTools(server, configured, policy);
 
   server.registerTool('scan', scanConfig, makeScanHandler(ctx) as never);
   server.registerTool('explain_finding', explainFindingConfig, makeExplainFindingHandler(ctx) as never);

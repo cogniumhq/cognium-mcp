@@ -43,18 +43,73 @@ uses.
   checked before the tool runs: a `..` segment is refused, a Windows-style path
   on a POSIX host (a UNC path on Windows) is refused, and everything else is
   resolved with `realpath` and refused outside the roots, so a symlink cannot
-  escape. The roots are `allowedRoots` (on `buildServer`, `createServer`,
-  `createHandler`), else `COGNIUM_MCP_ALLOWED_ROOTS`, else the working
-  directory. `'*'` as either is the explicit opt-out. `ToolContext.allowedRoots`
-  carries the real roots to modules (absent only when unconfined).
+  escape. The roots are the client's MCP roots and `allowedRoots` (on
+  `buildServer`, `createServer`, `createHandler`), else
+  `COGNIUM_MCP_ALLOWED_ROOTS` — never the working directory (next entry).
+  `'*'` as either is the explicit opt-out. `ToolContext.allowedRoots` carries
+  the real roots to modules.
 
   **This changes a default.** A call that used to read a directory outside the
-  working directory is now refused with `isError` and one line naming
+  allowed roots is now refused with `isError` and one line naming
   `COGNIUM_MCP_ALLOWED_ROOTS`. `buildServer()` with no options is confined
   too; it used to be unconfined. `dependency_calls` no longer reads
   `~/.m2/repository` unless that is inside a root (its `note` says so). Clients
-  that start servers in `/` (Claude Desktop on macOS) should set
-  `COGNIUM_MCP_ALLOWED_ROOTS`.
+  that send no MCP roots, such as those that start servers in `/` (Claude
+  Desktop on macOS), must set `COGNIUM_MCP_ALLOWED_ROOTS`.
+
+- **Every file read is confined, there is no implicit root, and the client's
+  MCP roots are honoured** (S5). The confinement above had gaps before it
+  shipped. `analyze_dependencies`' `resolved[].applies_to` was not checked, so
+  the tool read build files (`pom.xml`, `effective-pom.xml`, Gradle lockfiles,
+  `dependency-*.txt`) in any directory on the host. Files the tool finds on its
+  own inside a tree (those, advisory records and the default `advisory_db`)
+  were read through symlinks that led out of it. With no root configured, the
+  server fell back to the working directory, which some clients set to `/` or
+  `$HOME`, so it confined nothing. And the client's MCP `roots` were ignored.
+  Now:
+
+  - **Every file read stays inside the roots.** `applies_to` is checked like
+    every other path argument and must lie inside its own tree. A nested
+    relative path is checked against every tree of the call, so a
+    baseline-side `resolved[].path` is checked against `baseline_root` too. A
+    file a tool finds inside a tree is read only when its real path is still
+    inside that tree; one that is a symlink out reads as no file.
+  - **The allowed roots are the client's MCP roots** when it declares the
+    `roots` capability. They are asked for on every call: `roots/list` on a
+    2025-era connection; on the 2026-07-28 revision, an `input_required`
+    result whose `inputRequests["cognium/roots"]` is a `roots/list` request.
+    Where roots are also configured (`allowedRoots`, else
+    `COGNIUM_MCP_ALLOWED_ROOTS`), the client's roots only narrow them, to the
+    part inside both. Client roots never widen configured roots. Over HTTP
+    (`createHandler()`) they never stand in for them, because a remote
+    client's roots name its own machine's directories.
+  - **No implicit root.** With no configured root and no client roots, every
+    path-taking tool refuses with one line naming `COGNIUM_MCP_ALLOWED_ROOTS`,
+    whatever directory the server was started in. A client that declares
+    `roots` but fails `roots/list` gets the configured roots, or that refusal.
+  - New option `clientRoots: 'narrow' | 'establish'` on `buildServer`,
+    `createServer` and `createHandler`. The default is `'narrow'`; the stdio
+    binary uses `'establish'`, where the client's roots are the roots by
+    themselves. `ToolContext.allowedRoots` is the roots of the call in
+    progress, and is `undefined` only when that call is unconfined.
+    `resolveAllowedRoots()` takes no working directory and returns
+    `undefined` when nothing is configured. `rootPathsFromList()` and
+    `effectiveGuard()` are exported.
+
+  **Consumer Impact.**
+  - A client that sends no MCP roots, run without
+    `COGNIUM_MCP_ALLOWED_ROOTS`, now gets `isError` from every path-taking
+    tool. Before this change, those tools read the working directory. Set
+    the variable in the client's `env`.
+  - On a tree where a build file, lockfile, `dependency-*.txt`,
+    `effective-pom.xml` or advisory record is a symlink that leads out of the
+    tree, `analyze_dependencies` answers as if that file were absent. Before
+    this change, it read the file. The answer has fewer `dependencies[]` and
+    `matches[]`, and a `resolution[]` row comes from the next input in order.
+    An `applies_to` outside its tree, or a default `advisory_db` that is a
+    symlink out of the tree, is now an error.
+  - A module that reads `ctx.allowedRoots` while registering gets the
+    configured roots, not those of a call. Read it at call time.
 
 ### Added
 
@@ -86,7 +141,8 @@ uses.
   `baseline_root`, adds the advisories a change removed, added and left, and
   the dependency drift. The snapshot is indexed once per content (digest) per
   process. Its path arguments (`project_root`, `baseline_root`, `advisory_db`,
-  `resolved[].path`) are confined to the allowed roots like every other tool's.
+  `resolved[].path`, `resolved[].applies_to`) are confined to the allowed roots
+  like every other tool's, and so is every file it finds in a tree (S5).
   Fifteen built-in tools.
 
 - **Every tool declares an `outputSchema` and returns `structuredContent`**

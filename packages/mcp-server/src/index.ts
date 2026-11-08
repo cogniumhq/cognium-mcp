@@ -25,10 +25,13 @@ export {
   RootGuard,
   rootsFromEnv,
   resolveAllowedRoots,
+  rootPathsFromList,
+  effectiveGuard,
   ENV_ALLOWED_ROOTS,
   UNCONFINED,
   MAX_PATH_LENGTH,
   type AllowedRoots,
+  type ClientRootsPolicy,
 } from './roots.js';
 
 export {

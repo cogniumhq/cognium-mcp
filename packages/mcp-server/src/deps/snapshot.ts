@@ -6,12 +6,16 @@
  * anything. Its identity is a digest over the records it holds, so the same
  * records give the same digest wherever they are unpacked, and the answer can
  * carry it for the caller to record.
+ *
+ * Only records that are regular files inside the snapshot directory are
+ * read (S5): an entry that is a symlink out of it reads as no record.
  */
 
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildAdvisoryIndex, parseOsvRecord, type AdvisoryIndex, type OsvRecord } from 'circle-ir';
+import { fileInside } from '../roots.js';
 
 export interface Snapshot {
   /** Absolute path the snapshot was read from. */
@@ -27,14 +31,16 @@ export class SnapshotError extends Error {}
 
 function jsonFiles(dir: string): string[] {
   let names: string[];
+  let real: string;
   try {
     if (!statSync(dir).isDirectory()) throw new SnapshotError(`advisory_db is not a directory: ${dir}`);
+    real = realpathSync.native(dir);
     names = readdirSync(dir);
   } catch (err) {
     if (err instanceof SnapshotError) throw err;
     throw new SnapshotError(`advisory_db not found: ${dir}`);
   }
-  return names.filter((n) => n.endsWith('.json')).sort();
+  return names.filter((n) => n.endsWith('.json') && fileInside(real, join(dir, n)) !== undefined).sort();
 }
 
 function statKeyOf(dir: string, names: string[]): string {
