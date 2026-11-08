@@ -16,10 +16,14 @@
  * #1077). Its entries carry `declared.origin: "target-location"`.
  *
  * Nothing here runs a build or opens a connection: every input is a file
- * already in the tree (or named by the caller).
+ * already in the tree (or named by the caller). A file found in the tree is
+ * read only when its real path is still in the tree (S5): a symlinked
+ * `pom.xml`, lockfile or `effective-pom.xml` that leads out of it reads as
+ * no file, and a caller-named `applies_to` directory outside it is skipped
+ * (the tool refuses one before it gets here).
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import {
   MavenDeclaredIndex,
@@ -34,6 +38,7 @@ import {
 } from 'circle-ir';
 import { SKIPPED_DIRECTORIES } from '../util/files.js';
 import { isTychoTarget, parseTychoTarget } from './tycho-target.js';
+import { fileInside, pathInside, realOrResolved } from '../roots.js';
 
 export type ResolvedKind = 'maven-dependency-tree' | 'maven-dependency-list' | 'gradle-lockfile' | 'cyclonedx-json';
 
@@ -151,14 +156,24 @@ function parseResolved(kind: ResolvedKind, text: string): Dependency[] {
   }
 }
 
-function gradleLockfiles(dir: string): Array<{ file: string; configuration?: string }> {
-  if (existsSync(join(dir, 'gradle.lockfile'))) return [{ file: join(dir, 'gradle.lockfile') }];
+/** The lockfiles of one manifest directory, each as a real path inside `tree`. */
+function gradleLockfiles(dir: string, tree: string): Array<{ file: string; shown: string; configuration?: string }> {
+  const single = fileInside(tree, join(dir, 'gradle.lockfile'));
+  if (single) return [{ file: single, shown: join(dir, 'gradle.lockfile') }];
   const legacy = join(dir, 'gradle', 'dependency-locks');
-  if (!existsSync(legacy) || !statSync(legacy).isDirectory()) return [];
-  return readdirSync(legacy)
+  let names: string[];
+  try {
+    names = pathInside(tree, legacy) ? readdirSync(legacy) : [];
+  } catch {
+    return [];
+  }
+  return names
     .filter((n) => n.endsWith('.lockfile'))
     .sort()
-    .map((n) => ({ file: join(legacy, n), configuration: n.replace(/\.lockfile$/, '') }));
+    .flatMap((n) => {
+      const file = fileInside(tree, join(legacy, n));
+      return file ? [{ file, shown: join(legacy, n), configuration: n.replace(/\.lockfile$/, '') }] : [];
+    });
 }
 
 export interface ResolveOptions {
@@ -170,6 +185,7 @@ export interface ResolveOptions {
 /** Resolve the tree at `root`. Paths in the answer are relative to it. */
 export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolution {
   const root = resolve(rootIn);
+  const tree = realOrResolved(root);
   const { dirs, poms, targets, seen } = walk(root);
   const declaredIndex = poms.length > 0 ? new MavenDeclaredIndex(poms) : undefined;
   const explicit = (opts.resolved ?? []).filter((r) => (r.side ?? 'head') === opts.side);
@@ -179,6 +195,7 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
   // A caller-named input may point at a directory with no build file in it.
   for (const r of explicit) {
     const dir = resolve(root, r.applies_to ?? '.');
+    if (!pathInside(tree, dir)) continue;
     if (!dirs.includes(dir)) dirs.push(dir);
   }
   dirs.sort();
@@ -186,7 +203,8 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
   for (const dir of dirs) {
     const relDir = posix(relative(root, dir));
     const at = (f: string): string => (relDir ? `${relDir}/${f}` : f);
-    const buildFile = BUILD_FILES.find((b) => existsSync(join(dir, b)));
+    const buildFile = BUILD_FILES.find((b) => fileInside(tree, join(dir, b)));
+    const buildReal = buildFile ? fileInside(tree, join(dir, buildFile)) : undefined;
     const manifest = at(buildFile ?? 'gradle.lockfile');
     const isMaven = buildFile === 'pom.xml';
 
@@ -194,24 +212,26 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
     let input: string;
     let found: Dependency[];
     const named = explicit.find((r) => resolve(root, r.applies_to ?? '.') === dir);
-    const locks = gradleLockfiles(dir);
+    const locks = gradleLockfiles(dir, tree);
+    const runOutput = ['dependency-tree.txt', 'dependency-list.txt']
+      .map((f) => ({ f, real: fileInside(tree, join(dir, f)) }))
+      .find((o) => o.real !== undefined);
     if (named) {
       kind = named.kind === 'gradle-lockfile' ? 'lockfile' : 'resolved';
       input = named.path;
       found = parseResolved(named.kind, readFileSync(resolve(root, named.path), 'utf8'));
     } else if (locks.length > 0) {
       kind = 'lockfile';
-      input = locks.map((l) => posix(relative(root, l.file))).join(', ');
+      input = locks.map((l) => posix(relative(root, l.shown))).join(', ');
       found = locks.flatMap((l) => parseGradleLockfile(readFileSync(l.file, 'utf8'), l.configuration));
-    } else if (existsSync(join(dir, 'dependency-tree.txt')) || existsSync(join(dir, 'dependency-list.txt'))) {
-      const f = existsSync(join(dir, 'dependency-tree.txt')) ? 'dependency-tree.txt' : 'dependency-list.txt';
+    } else if (runOutput?.real) {
       kind = 'resolved';
-      input = at(f);
-      found = parseMavenResolvedDependencies(readFileSync(join(dir, f), 'utf8'));
-    } else if (buildFile) {
+      input = at(runOutput.f);
+      found = parseMavenResolvedDependencies(readFileSync(runOutput.real, 'utf8'));
+    } else if (buildFile && buildReal) {
       kind = 'declared';
       input = manifest;
-      const text = readFileSync(join(dir, buildFile), 'utf8');
+      const text = readFileSync(buildReal, 'utf8');
       // `<dependencyManagement>` pins versions, it does not add dependencies;
       // plugin dependencies are the build's, not the project's.
       found = isMaven
@@ -226,11 +246,12 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
     let kept = 0;
     // An effective POM written beside this module fills in versions its raw
     // POMs leave to a BOM or an external parent.
-    const effective = isMaven && existsSync(join(dir, 'effective-pom.xml'))
-      ? new MavenDeclaredIndex(poms, readFileSync(join(dir, 'effective-pom.xml'), 'utf8'))
+    const effectivePom = isMaven ? fileInside(tree, join(dir, 'effective-pom.xml')) : undefined;
+    const effective = effectivePom
+      ? new MavenDeclaredIndex(poms, readFileSync(effectivePom, 'utf8'))
       : declaredIndex;
-    const gradleDeclared = !isMaven && buildFile
-      ? parseGradleDependencies(readFileSync(join(dir, buildFile), 'utf8'))
+    const gradleDeclared = !isMaven && buildReal
+      ? parseGradleDependencies(readFileSync(buildReal, 'utf8'))
       : [];
 
     for (const d of found) {
