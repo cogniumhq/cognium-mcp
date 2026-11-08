@@ -3,7 +3,9 @@
  * module — is confined by default. `..` and Windows-style paths are refused
  * on their spelling; everything else is resolved with realpath and refused
  * outside the roots, so neither an absolute path nor a symlink leads a tool
- * out. The opt-out is explicit: `'*'`, as the option or the variable.
+ * out. The opt-out is explicit: `'*'`, as the option or the variable. There
+ * is no implicit root (S5): with none configured and no client roots, every
+ * path is refused — `s5-confinement.test.ts` covers that and client roots.
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
@@ -161,12 +163,12 @@ describe('where the roots come from', () => {
     expect(rootsFromEnv({})).toBeUndefined();
   });
 
-  it('is the option, else the environment, else the working directory', () => {
+  it('is the option, else the environment, and never the working directory', () => {
     const env = { [ENV_ALLOWED_ROOTS]: outside };
-    expect(resolveAllowedRoots([project], env, '/cwd')).toEqual([project]);
-    expect(resolveAllowedRoots(UNCONFINED, env, '/cwd')).toBe(UNCONFINED);
-    expect(resolveAllowedRoots(undefined, env, '/cwd')).toEqual([outside]);
-    expect(resolveAllowedRoots(undefined, {}, '/cwd')).toEqual(['/cwd']);
+    expect(resolveAllowedRoots([project], env)).toEqual([project]);
+    expect(resolveAllowedRoots(UNCONFINED, env)).toBe(UNCONFINED);
+    expect(resolveAllowedRoots(undefined, env)).toEqual([outside]);
+    expect(resolveAllowedRoots(undefined, {})).toBeUndefined();
   });
 });
 
@@ -292,28 +294,30 @@ describe('a server with allowed roots', () => {
   });
 });
 
-describe('the default: confined to the working directory', () => {
-  it('buildServer() with no option and no variable refuses a directory outside the working directory', async () => {
+describe('the default: no root at all (S5)', () => {
+  it('buildServer() with no option and no variable refuses every path, the working directory included', async () => {
     const client = await connect({});
     try {
       const out = (await client.callTool({ name: 'scan', arguments: { path: outside } })) as Result;
       expect(out.isError).toBe(true);
-      expect(out.content[0].text).toMatch(/outside the allowed roots/);
+      expect(out.content[0].text).toMatch(/no allowed roots/);
       expect(JSON.stringify(out)).not.toContain(MARKER);
-      const ok = (await client.callTool({ name: 'list_entry_points', arguments: { project_root: inCwd } })) as Result;
-      expect(ok.isError, ok.content[0]?.text).toBeFalsy();
+      const cwd = (await client.callTool({ name: 'list_entry_points', arguments: { project_root: inCwd } })) as Result;
+      expect(cwd.isError).toBe(true);
+      expect(cwd.content[0].text).toMatch(new RegExp(ENV_ALLOWED_ROOTS));
     } finally {
       await client.close();
     }
   });
 
-  it('COGNIUM_MCP_ALLOWED_ROOTS replaces the working directory', async () => {
+  it('COGNIUM_MCP_ALLOWED_ROOTS names the roots', async () => {
     process.env[ENV_ALLOWED_ROOTS] = project;
     const client = await connect({});
     try {
       expect(((await client.callTool({ name: 'scan', arguments: { path: project } })) as Result).isError).toBeFalsy();
       const cwd = (await client.callTool({ name: 'list_entry_points', arguments: { project_root: inCwd } })) as Result;
       expect(cwd.isError).toBe(true);
+      expect(cwd.content[0].text).toMatch(/outside the allowed roots/);
     } finally {
       await client.close();
     }
@@ -355,13 +359,15 @@ describe('createHandler (HTTP)', () => {
     return JSON.parse(line ? line.slice(6) : body) as { result: Result };
   };
 
-  it('is confined to the working directory by default', async () => {
+  it('refuses every path when the host names no roots', async () => {
     const handler = createHandler();
     try {
-      const r = await call(handler, { path: outside });
-      expect(r.result.isError).toBe(true);
-      expect(r.result.content[0].text).toMatch(/outside the allowed roots/);
-      expect(JSON.stringify(r)).not.toContain(MARKER);
+      for (const path of [outside, inCwd]) {
+        const r = await call(handler, { path });
+        expect(r.result.isError).toBe(true);
+        expect(r.result.content[0].text).toMatch(/no allowed roots/);
+        expect(JSON.stringify(r)).not.toContain(MARKER);
+      }
     } finally {
       await handler.close();
     }

@@ -25,6 +25,7 @@ import {
 import { DETERMINISTIC, READ_ONLY_ANNOTATIONS, errorResult, type ToolResult } from './types.js';
 import { SnapshotCache, SnapshotError, type Snapshot } from '../deps/snapshot.js';
 import { resolveTree, type Declared, type ResolvedInput, type TreeResolution } from '../deps/resolve.js';
+import { activeGuard, pathInside, realOrResolved } from '../roots.js';
 
 /** Where a build run's archive carries the snapshot when no path is given. */
 export const DEFAULT_ADVISORY_DB = join('.cognium', 'advisory', 'osv-maven');
@@ -360,11 +361,41 @@ export function makeAnalyzeDependenciesHandler(snapshots: SnapshotCache = new Sn
     if (!isDir(root)) return errorResult(`project_root not found: ${root}`);
     const baselineRoot = args.baseline_root ? resolve(args.baseline_root) : undefined;
     if (baselineRoot && !isDir(baselineRoot)) return errorResult(`baseline_root not found: ${baselineRoot}`);
-    const dbPath = resolve(args.advisory_db ?? join(root, DEFAULT_ADVISORY_DB));
-    for (const r of args.resolved ?? []) {
-      const base = (r.side ?? 'head') === 'baseline' ? baselineRoot : root;
+    // What the tool finds and reads inside a tree stays inside it (S5): the
+    // trees as real paths, to hold every read against.
+    const realRoot = realOrResolved(root);
+    const realBaseline = baselineRoot ? realOrResolved(baselineRoot) : undefined;
+
+    let dbPath: string;
+    if (args.advisory_db !== undefined) dbPath = resolve(args.advisory_db);
+    else {
+      const fallback = join(root, DEFAULT_ADVISORY_DB);
+      const inside = pathInside(realRoot, fallback);
+      if (!inside) return errorResult(`the default advisory_db ${fallback} leads outside project_root; pass advisory_db`);
+      dbPath = inside;
+    }
+
+    // Each caller-named input is read relative to its own tree, so it is
+    // checked there: the file against the allowed roots of this call, and
+    // the manifest directory it stands for against the tree itself, since
+    // the tool reads build files in that directory.
+    const guard = activeGuard();
+    for (const [i, r] of (args.resolved ?? []).entries()) {
+      const isBaseline = (r.side ?? 'head') === 'baseline';
+      const base = isBaseline ? baselineRoot : root;
       if (!base) return errorResult(`resolved input ${r.path} is for the baseline, but no baseline_root was given`);
-      if (!existsSync(resolve(base, r.path))) return errorResult(`resolved input not found: ${resolve(base, r.path)}`);
+      const tree = isBaseline ? realBaseline : realRoot;
+      if (r.applies_to !== undefined && (!tree || !pathInside(tree, resolve(base, r.applies_to)))) {
+        return errorResult(
+          `\`resolved[${i}].applies_to\` is outside ${isBaseline ? 'baseline_root' : 'project_root'}: ${r.applies_to}`,
+        );
+      }
+      const file = resolve(base, r.path);
+      if (guard) {
+        const checked = guard.check(file, `resolved[${i}].path`);
+        if ('error' in checked) return errorResult(checked.error);
+      }
+      if (!existsSync(file)) return errorResult(`resolved input not found: ${file}`);
     }
 
     let loaded: { snapshot: Snapshot; cacheHit: boolean };

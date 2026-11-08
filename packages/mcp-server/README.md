@@ -305,28 +305,44 @@ pass and resolves nothing.
 
 Every path argument of every tool — `scan.path`, every `project_root`,
 `dependency_calls`' `jar_path` and `maven_repo_dir`, nested paths such as
-`site.file`, and the path arguments of an optional module's tools — is
-**confined to the allowed roots** before the tool runs (since the release after
-0.8.1, #37):
+`site.file` and `analyze_dependencies`' `resolved[].path` and
+`resolved[].applies_to`, and the path arguments of an optional module's tools
+— is **confined to the allowed roots** before the tool runs (0.9.0, #37, S5):
 
 - a path with a `..` segment is refused, wherever it would land;
 - on a POSIX host a Windows-style path (backslashes, `C:`) is refused; on
   Windows a UNC path (`\\server\share`) is;
 - everything else is resolved with `realpath`, so a symlink is judged by where
   it points, and refused unless that lies inside a root. A tree argument inside
-  a root reaches the tool as its real path.
+  a root reaches the tool as its real path; a nested relative path is checked
+  against every tree of the call.
 
-The roots are, in order: `allowedRoots` passed to `buildServer()`,
-`createServer()` or `createHandler()`; else `COGNIUM_MCP_ALLOWED_ROOTS`
-(directories separated by `:`, or `;` on Windows); else **the working
-directory** the server was started in. The opt-out is explicit:
-`allowedRoots: '*'` or `COGNIUM_MCP_ALLOWED_ROOTS=*`. The stdio binary says on
-stderr which applies.
+The files a tool then finds on its own inside a tree — a build file, a
+lockfile, `dependency-tree.txt`, `effective-pom.xml`, an advisory record — are
+read only when their real path is still inside that tree, so a symlink planted
+in a project cannot lead a read out of it either.
 
-Over HTTP, set the roots: the host's working directory holds the host's own
-files. Some clients start stdio servers in `/` (Claude Desktop on macOS does),
-which makes the working-directory default the whole disk; set
-`COGNIUM_MCP_ALLOWED_ROOTS` in the client's `env` there:
+**The allowed roots** are:
+
+- **the client's MCP roots**, when the client declares the `roots` capability
+  (asked for on every call, so a folder the user opens counts from the next
+  call). On the stdio binary they are the roots by themselves; wherever roots
+  are also configured, they only narrow them — a tool may read the part of the
+  client's roots that lies inside a configured root;
+- **the configured roots**: `allowedRoots` passed to `buildServer()`,
+  `createServer()` or `createHandler()`, else `COGNIUM_MCP_ALLOWED_ROOTS`
+  (directories separated by `:`, or `;` on Windows);
+- **nothing else.** With no configured root and no client roots, every path is
+  refused, with one line naming `COGNIUM_MCP_ALLOWED_ROOTS`. The working
+  directory is never a root: clients start servers in `/` (Claude Desktop on
+  macOS) or in `$HOME`.
+
+The opt-out is explicit: `allowedRoots: '*'` or `COGNIUM_MCP_ALLOWED_ROOTS=*`
+(the client's roots, if it sends any, still narrow it). The stdio binary says
+on stderr which applies.
+
+A client that sends no MCP roots — or declares the capability and does not
+answer `roots/list` — needs `COGNIUM_MCP_ALLOWED_ROOTS` in its `env`:
 
 ```json
 "cognium": {
@@ -335,6 +351,15 @@ which makes the working-directory default the whole disk; set
   "env": { "COGNIUM_MCP_ALLOWED_ROOTS": "/Users/me/src" }
 }
 ```
+
+Over HTTP, a client's MCP roots name directories on the client's machine, so
+on `createHandler()` they can only narrow the roots the host configures, never
+stand in for them: a host that names no roots serves no path. A host that
+connects `buildServer()` to a transport of its own gets the same rule unless it
+passes `clientRoots: 'establish'`. On the 2026-07-28 revision, where a server
+cannot send a request to the client, a client that declares `roots` is asked
+for them with an `input_required` result (`inputRequests["cognium/roots"]`, a
+`roots/list` request) and the call goes on when it retries with the answer.
 
 `dependency_calls` reads the local Maven repository (`~/.m2/repository`) only
 when it lies inside a root; otherwise the artifact's packages come from the
@@ -356,9 +381,11 @@ export default {
     // ctx.cache      — the server's analysis cache, shared with every tool
     // ctx.enablement — what this install may offer; the module decides what
     //                  to register, and checks again at call time
-    // ctx.allowedRoots — the real paths tools may read. The server has
-    //                  already checked the tool's path arguments; hold any
-    //                  further path the module reads to the same roots
+    // ctx.allowedRoots — the real paths tools may read in the call in
+    //                  progress (read it at call time: it follows the
+    //                  client's MCP roots). The server has already checked
+    //                  the tool's path arguments; hold any further path the
+    //                  module reads to the same roots
   },
 };
 ```
@@ -386,7 +413,7 @@ A module that throws while registering is reported the same way.
 | Variable | Effect |
 |---|---|
 | `COGNIUM_MCP_MODULES` | Which module specifiers to look for. `none` disables. |
-| `COGNIUM_MCP_ALLOWED_ROOTS` | The directories tools may read, `:`-separated (`;` on Windows). Default: the working directory. `*` turns confinement off. |
+| `COGNIUM_MCP_ALLOWED_ROOTS` | The directories tools may read, `:`-separated (`;` on Windows), narrowed to the client's MCP roots when it sends them. Unset: only the client's MCP roots, and with none every path is refused (never the working directory). `*` turns confinement off. |
 | `COGNIUM_ENDPOINT` | An opaque endpoint passed through to modules. The server never parses or connects to it. |
 | `COGNIUM_LICENSE` | A licence token, verified offline. Also read from `$COGNIUM_CONFIG_DIR/license`, default `~/.cognium/license`. |
 | `COGNIUM_LICENSE_PUBKEY` | Extra verification keys as `kid=key[,kid=key]`, base64url raw Ed25519, merged over the published ones. A bare key with no `kid=` matches any token, which is a development convenience and not for production. |
