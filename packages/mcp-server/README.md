@@ -158,7 +158,7 @@ tests reaching each (covered when `tests[0].class` is `strong`), `covered`,
 `counts` and truncation. The contract is C4 0.5.0 §11c.
 
 It is computed by `@cognium/code-facts` 0.1.0, an exact dependency of the
-server since 0.8.1, on the same `circle-ir` (4.18.1) the server pins, so one
+server since 0.8.1, on the same `circle-ir` (4.20.0) the server pins, so one
 `circle-ir` is installed. If the package cannot be loaded, the tool answers
 with one line saying so, and every other tool keeps serving.
 
