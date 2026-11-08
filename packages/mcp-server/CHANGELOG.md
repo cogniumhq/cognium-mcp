@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-11-06
+## [0.9.0] - 2026-11-08
 
 Tested against `circle-ir` **4.20.0** (was 4.18.1; 4.19.0 is skipped). The
 optional module to pair it with is `circle-ir-ai` **4.31.0**, built on 4.20.0
