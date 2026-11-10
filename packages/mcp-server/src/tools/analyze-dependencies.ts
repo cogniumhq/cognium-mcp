@@ -1,6 +1,7 @@
 /**
- * `analyze_dependencies` tool — known advisories in a Java project's resolved
- * dependency set, matched against an advisory snapshot the caller pins, and,
+ * `analyze_dependencies` tool — known advisories in a project's resolved
+ * dependency set (Maven and Gradle; npm, pnpm and Yarn from T-DT3.8), matched
+ * against advisory snapshots the caller pins (one per ecosystem), and,
  * given the tree at an earlier pin, what the change removed and added.
  *
  * Deterministic and offline: it reads the tree and the snapshot directory and
@@ -24,11 +25,16 @@ import {
 } from 'circle-ir';
 import { DETERMINISTIC, READ_ONLY_ANNOTATIONS, errorResult, type ToolResult } from './types.js';
 import { SnapshotCache, SnapshotError, type Snapshot } from '../deps/snapshot.js';
-import { resolveTree, type Declared, type ResolvedInput, type TreeResolution } from '../deps/resolve.js';
+import { resolveTree, type Declared, type ResolvedInput, type ToolEcosystem, type TreeResolution } from '../deps/resolve.js';
 import { activeGuard, pathInside, realOrResolved } from '../roots.js';
 
 /** Where a build run's archive carries the snapshot when no path is given. */
 export const DEFAULT_ADVISORY_DB = join('.cognium', 'advisory', 'osv-maven');
+/** The npm snapshot's default place (`unzip npm/all.zip` of OSV.dev), C4 §11a2. */
+export const DEFAULT_ADVISORY_DB_NPM = join('.cognium', 'advisory', 'osv-npm');
+
+/** OSV's name for each ecosystem the tool reads. */
+const OSV_NAME: Record<ToolEcosystem, string> = { maven: 'Maven', npm: 'npm' };
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -40,20 +46,30 @@ const inputSchema = z.object({
     'Absolute path to an OSV advisory snapshot: a directory of OSV JSON records, as `unzip Maven/all.zip` leaves it. ' +
     `Default: <project_root>/${DEFAULT_ADVISORY_DB.split('\\').join('/')}. The tool never downloads one.`,
   ),
+  advisory_dbs: z.object({
+    maven: z.string().optional().describe('The Maven snapshot (the same as `advisory_db`).'),
+    npm: z.string().optional().describe(
+      `The npm snapshot, as \`unzip npm/all.zip\` leaves it. Default: <project_root>/${DEFAULT_ADVISORY_DB_NPM.split('\\').join('/')}.`,
+    ),
+  }).optional().describe('One snapshot directory per ecosystem.'),
   baseline_root: z.string().optional().describe(
     'Absolute path to the same project at the earlier pin. Adds `delta` (advisories removed, added, persisting; ' +
     'dependency drift) and the baseline side\'s `resolution`, both under the one snapshot.',
   ),
   resolved: z.array(z.object({
     path: z.string().describe('The file, absolute or relative to its tree root.'),
-    kind: z.enum(['maven-dependency-tree', 'maven-dependency-list', 'gradle-lockfile', 'cyclonedx-json']),
+    kind: z.enum(['maven-dependency-tree', 'maven-dependency-list', 'gradle-lockfile', 'cyclonedx-json', 'npm-package-lock', 'pnpm-lock', 'yarn-lock']),
     applies_to: z.string().optional().describe('Manifest directory it stands for, relative to the tree root (default: the root).'),
     side: z.enum(['head', 'baseline']).optional().describe('Which tree it belongs to (default: head).'),
   })).optional().describe(
     'Resolved dependency files under non-standard names. Without them each manifest directory uses, in order: ' +
-    'gradle.lockfile (or gradle/dependency-locks/*.lockfile), dependency-tree.txt, dependency-list.txt, then the build file itself.',
+    'gradle.lockfile (or gradle/dependency-locks/*.lockfile), dependency-tree.txt, dependency-list.txt, then the build file itself; ' +
+    'for npm: pnpm-lock.yaml (one manifest per importer), package-lock.json, yarn.lock, then package.json (direct, declared).',
   ),
-  ecosystems: z.array(z.enum(['maven'])).optional().describe('Ecosystems to match. Maven only (Maven and Gradle projects).'),
+  ecosystems: z.array(z.enum(['maven', 'npm'])).optional().describe(
+    'Ecosystems to match: `maven` (Maven and Gradle projects) and `npm`. Default: Maven, plus npm when the tree has npm ' +
+    'manifests and an npm snapshot is present. An ecosystem with no manifest in the tree is reported in `coverage`.',
+  ),
   include_dev: z.boolean().optional().describe(
     'Include test-only dependencies: Maven `test` and `provided` scopes, and Gradle coordinates found only on test configurations. Default false.',
   ),
@@ -109,6 +125,16 @@ const deltaMatchSchema = z.object({
   headManifests: z.array(z.string()),
 });
 
+const advisoryDbEntry = z.object({
+  source: z.literal('osv'),
+  path: z.string(),
+  ecosystems: z.array(z.string()),
+  digest: z.string(),
+  snapshotDate: z.string().nullable(),
+  records: z.number(),
+  withdrawn: z.array(z.object({ id: z.string(), aliases: z.array(z.string()), withdrawnAt: z.string() })),
+});
+
 const resolutionSchema = z.array(z.object({
   manifest: z.string(),
   kind: z.enum(['resolved', 'lockfile', 'declared']),
@@ -137,15 +163,8 @@ const outputSchema = z.object({
   projectRoot: z.string(),
   cacheHit: z.boolean(),
   analysisMs: z.number(),
-  advisoryDb: z.object({
-    source: z.literal('osv'),
-    path: z.string(),
-    ecosystems: z.array(z.string()),
-    digest: z.string(),
-    snapshotDate: z.string().nullable(),
-    records: z.number(),
-    withdrawn: z.array(z.object({ id: z.string(), aliases: z.array(z.string()), withdrawnAt: z.string() })),
-  }),
+  // One object for a Maven-only answer (as before T-DT3.8); one entry per ecosystem otherwise.
+  advisoryDb: z.union([advisoryDbEntry, z.array(advisoryDbEntry.extend({ ecosystem: z.string() }))]),
   resolution: resolutionSchema,
   coverage: coverageSchema,
   dependencies: z.array(z.object(depShape)),
@@ -184,10 +203,11 @@ const outputSchema = z.object({
 export const analyzeDependenciesConfig = {
   title: 'Analyze dependencies',
   description:
-    'Known advisories in a Java project (Maven or Gradle): resolves each manifest to its dependency set — from a ' +
-    'Gradle lockfile or Maven `dependency:tree` output when present, else the build file, and says which — and ' +
-    'matches every coordinate against an OSV advisory snapshot you supply (default: ' +
-    '<project_root>/.cognium/advisory/osv-maven). Returns the advisory id, aliases (CVE), affected ranges and ' +
+    'Known advisories in a Java project (Maven or Gradle) or an npm project: resolves each manifest to its dependency ' +
+    'set — from a Gradle lockfile or Maven `dependency:tree` output, or a pnpm (per importer), npm or Yarn lockfile, ' +
+    'when present, else the build file or package.json, and says which — and matches every coordinate against the ' +
+    'OSV advisory snapshot you supply for its ecosystem (defaults: <project_root>/.cognium/advisory/osv-maven and ' +
+    '…/osv-npm). Returns the advisory id, aliases (CVE), affected ranges and ' +
     'later fixed versions per match, the declared version and where it comes from, dependency paths, and the ' +
     'snapshot digest and date. With `baseline_root`, also the advisories the change removed, added and left, ' +
     'and the dependency drift. Offline and deterministic: no build is run and nothing is downloaded.',
@@ -217,10 +237,11 @@ interface Side {
 
 /** Merge per-manifest entries that agree on coordinate, scope and declaration. */
 function aggregate(tree: TreeResolution): Pick<Side, 'deps' | 'reps' | 'byRep'> {
-  const acc = new Map<string, { out: DepOut; directs: Array<boolean | undefined>; graph: boolean; paths: Map<string, string[]> }>();
+  const acc = new Map<string, { out: DepOut; directs: Array<boolean | undefined>; graph: boolean; paths: Map<string, string[]>; ecosystem: Dependency['ecosystem'] }>();
   for (const md of tree.deps) {
     const d = md.dep;
-    const key = `${d.name}\0${d.version}\0${d.scope}\0${JSON.stringify(md.declared)}`;
+    // An npm package and a Maven artifact of the same name stay apart (C4 §11a2).
+    const key = `${d.ecosystem}\0${d.name}\0${d.version}\0${d.scope}\0${JSON.stringify(md.declared)}`;
     let a = acc.get(key);
     if (!a) {
       a = {
@@ -228,6 +249,7 @@ function aggregate(tree: TreeResolution): Pick<Side, 'deps' | 'reps' | 'byRep'> 
         directs: [],
         graph: false,
         paths: new Map(),
+        ecosystem: d.ecosystem,
       };
       acc.set(key, a);
     }
@@ -249,7 +271,7 @@ function aggregate(tree: TreeResolution): Pick<Side, 'deps' | 'reps' | 'byRep'> 
     a.out.manifests.sort();
     a.out.direct = a.directs.includes(true) ? true : a.directs.includes(false) ? false : null;
     a.out.via = a.graph ? [...a.paths.values()].sort((p, q) => cmpStr(p.join('/'), q.join('/'))) : null;
-    const rep: Dependency = { name: a.out.name, version: a.out.version, ecosystem: 'maven', scope: a.out.scope as Dependency['scope'], purl: a.out.purl };
+    const rep: Dependency = { name: a.out.name, version: a.out.version, ecosystem: a.ecosystem, scope: a.out.scope as Dependency['scope'], purl: a.out.purl };
     deps.push(a.out);
     reps.push(rep);
     byRep.set(rep, a.out);
@@ -267,9 +289,11 @@ function toMatch(m: AdvisoryMatch, byRep: Map<Dependency, DepOut>): MatchOut {
   };
 }
 
-function side(tree: TreeResolution, snapshot: Snapshot): Side {
+function side(tree: TreeResolution, snapshots: ReadonlyMap<ToolEcosystem, Snapshot>): Side {
   const agg = aggregate(tree);
-  const libMatches = matchAdvisories(agg.reps, snapshot.index);
+  // Each ecosystem's dependencies against its own snapshot, with its own version order.
+  const libMatches = [...snapshots].flatMap(([eco, snapshot]) =>
+    matchAdvisories(agg.reps.filter((r) => r.ecosystem === eco), snapshot.index));
   const matches = libMatches
     .map((m) => toMatch(m, agg.byRep))
     .sort((x, y) => cmpStr(x.name, y.name) || cmpStr(x.version, y.version) || cmpStr(x.advisory.id, y.advisory.id) || cmpStr(x.manifests.join(','), y.manifests.join(',')));
@@ -346,9 +370,10 @@ function isDir(p: string): boolean {
 export interface AnalyzeDependenciesArgs {
   project_root: string;
   advisory_db?: string;
+  advisory_dbs?: { maven?: string; npm?: string };
   baseline_root?: string;
   resolved?: ResolvedInput[];
-  ecosystems?: Array<'maven'>;
+  ecosystems?: ToolEcosystem[];
   include_dev?: boolean;
   max_dependencies?: number;
 }
@@ -366,14 +391,24 @@ export function makeAnalyzeDependenciesHandler(snapshots: SnapshotCache = new Sn
     const realRoot = realOrResolved(root);
     const realBaseline = baselineRoot ? realOrResolved(baselineRoot) : undefined;
 
-    let dbPath: string;
-    if (args.advisory_db !== undefined) dbPath = resolve(args.advisory_db);
-    else {
-      const fallback = join(root, DEFAULT_ADVISORY_DB);
-      const inside = pathInside(realRoot, fallback);
-      if (!inside) return errorResult(`the default advisory_db ${fallback} leads outside project_root; pass advisory_db`);
-      dbPath = inside;
+    if (args.advisory_db !== undefined && args.advisory_dbs?.maven !== undefined && resolve(args.advisory_db) !== resolve(args.advisory_dbs.maven)) {
+      return errorResult('advisory_db and advisory_dbs.maven name different snapshots; pass one of them');
     }
+    const dbPathFor = (eco: ToolEcosystem): { path: string } | { error: string } => {
+      const given = eco === 'maven' ? args.advisory_dbs?.maven ?? args.advisory_db : args.advisory_dbs?.npm;
+      if (given !== undefined) return { path: resolve(given) };
+      const fallback = join(root, eco === 'maven' ? DEFAULT_ADVISORY_DB : DEFAULT_ADVISORY_DB_NPM);
+      const inside = pathInside(realRoot, fallback);
+      if (!inside) {
+        const name = eco === 'maven' ? 'advisory_db' : 'advisory_dbs.npm';
+        return { error: `the default ${name} ${fallback} leads outside project_root; pass ${name}` };
+      }
+      return { path: inside };
+    };
+    // Which ecosystems: as asked; else Maven (as before), and npm when its snapshot is there.
+    const asked = args.ecosystems ? new Set<ToolEcosystem>(args.ecosystems) : undefined;
+    const npmDb = dbPathFor('npm');
+    const wanted = asked ?? new Set<ToolEcosystem>(['maven', ...('path' in npmDb && isDir(npmDb.path) ? ['npm' as const] : [])]);
 
     // Each caller-named input is read relative to its own tree, so it is
     // checked there: the file against the allowed roots of this call, and
@@ -398,35 +433,57 @@ export function makeAnalyzeDependenciesHandler(snapshots: SnapshotCache = new Sn
       if (!existsSync(file)) return errorResult(`resolved input not found: ${file}`);
     }
 
-    let loaded: { snapshot: Snapshot; cacheHit: boolean };
-    try {
-      loaded = snapshots.load(dbPath);
-    } catch (err) {
-      if (err instanceof SnapshotError) return errorResult(err.message);
-      throw err;
-    }
-    const { snapshot } = loaded;
     const includeDev = args.include_dev ?? false;
-
-    const head = side(resolveTree(root, { includeDev, side: 'head', resolved: args.resolved }), snapshot);
-    const base = baselineRoot
-      ? side(resolveTree(baselineRoot, { includeDev, side: 'baseline', resolved: args.resolved }), snapshot)
+    const headTree = resolveTree(root, { includeDev, side: 'head', resolved: args.resolved, ecosystems: wanted });
+    const baseTree = baselineRoot
+      ? resolveTree(baselineRoot, { includeDev, side: 'baseline', resolved: args.resolved, ecosystems: wanted })
       : undefined;
+    // npm is matched only where an npm manifest resolved: with none, the answer stays Maven-only, as
+    // before, and an asked-for npm is not refused (C4 §11a2), it is simply not in `coverage`.
+    const trees = [headTree, baseTree].filter((t): t is TreeResolution => t !== undefined);
+    const npmResolved = trees.some((t) => t.resolution.some((r) => r.manifest.endsWith('package.json')));
+    const mavenResolved = trees.some((t) => t.resolution.some((r) => !r.manifest.endsWith('package.json')));
+    // Maven as before (its snapshot is required) unless only npm manifests resolved and Maven was not asked for.
+    const used = [...wanted]
+      .filter((e) => (e === 'npm' ? npmResolved : mavenResolved || !npmResolved || asked?.has('maven') === true))
+      .sort();
+
+    const loaded = new Map<ToolEcosystem, Snapshot>();
+    let cacheHit = true;
+    for (const eco of used) {
+      const db = eco === 'npm' ? npmDb : dbPathFor(eco);
+      if ('error' in db) return errorResult(db.error);
+      try {
+        const l = snapshots.load(db.path, OSV_NAME[eco]);
+        loaded.set(eco, l.snapshot);
+        cacheHit &&= l.cacheHit;
+      } catch (err) {
+        if (err instanceof SnapshotError) return errorResult(eco === 'npm' ? err.message.replace(/^advisory_db/, 'advisory_dbs.npm') : err.message);
+        throw err;
+      }
+    }
+
+    const head = side(headTree, loaded);
+    const base = baseTree ? side(baseTree, loaded) : undefined;
+    const dbEntry = (s: Snapshot) => ({
+      source: 'osv' as const,
+      path: s.path,
+      ecosystems: [s.index.ecosystem],
+      digest: s.digest,
+      snapshotDate: s.index.snapshotDate,
+      records: s.index.records,
+      withdrawn: s.index.withdrawn,
+    });
+    const advisoryDb = used.length === 1 && used[0] === 'maven'
+      ? dbEntry(loaded.get('maven') as Snapshot)
+      : used.map((e) => ({ ...dbEntry(loaded.get(e) as Snapshot), ecosystem: OSV_NAME[e] }));
 
     const max = args.max_dependencies ?? 2000;
     const body = {
       projectRoot: root,
-      cacheHit: loaded.cacheHit,
+      cacheHit,
       analysisMs: Date.now() - started,
-      advisoryDb: {
-        source: 'osv' as const,
-        path: snapshot.path,
-        ecosystems: [snapshot.index.ecosystem],
-        digest: snapshot.digest,
-        snapshotDate: snapshot.index.snapshotDate,
-        records: snapshot.index.records,
-        withdrawn: snapshot.index.withdrawn,
-      },
+      advisoryDb,
       resolution: head.tree.resolution,
       coverage: head.tree.coverage,
       dependencies: head.deps.slice(0, max),

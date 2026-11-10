@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`analyze_dependencies` reads npm projects** (#51). `ecosystems` takes
+  `"npm"` beside `"maven"`; without it, npm is matched when the tree has npm
+  manifests and an npm snapshot is present (else it stays in
+  `coverage.notCovered`, as before). Per directory holding a `package.json`,
+  best input first: a caller-named `resolved` file (new kinds
+  `npm-package-lock`, `pnpm-lock`, `yarn-lock`); `pnpm-lock.yaml`, as one
+  manifest per workspace importer with only what that importer reaches
+  (circle-ir `parsePnpmLockImporterDependencies`); `package-lock.json` /
+  `npm-shrinkwrap.json`; `yarn.lock`; else `package.json` (`declared`). Ranges,
+  dist-tags and `unknown` versions are unresolved and never matched;
+  `node_modules/` is never read. The npm snapshot is the new
+  `advisory_dbs.npm` (default `<project_root>/.cognium/advisory/osv-npm`);
+  `advisory_dbs.maven` is the same as `advisory_db`. Matches, the delta and the
+  drift key on ecosystem and name. With npm in the answer `advisoryDb` is one
+  entry per ecosystem (each with `ecosystem`); a Maven-only answer is unchanged,
+  byte for byte. Every npm file is read only when its real path is in the tree,
+  and `advisory_dbs` paths go through the allowed roots like every other path.
+- The tool's input and output schemas change (an enum widened, optional inputs,
+  `advisoryDb` may be a list), so `verify-install --same-tools-as` reports them
+  as breaking: the next release says how it treats them.
+
 ## [0.9.0] - 2026-11-08
 
 Tested against `circle-ir` **4.20.0** (was 4.18.1; 4.19.0 is skipped). The

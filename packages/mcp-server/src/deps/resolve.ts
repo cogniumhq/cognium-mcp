@@ -10,6 +10,20 @@
  *      run (`mvn dependency:tree|list -DoutputFile=…`)             → `resolved`;
  *   4. the build file itself (`pom.xml`, `build.gradle[.kts]`)       → `declared`.
  *
+ * npm (T-DT3.8, C4 §11a2), per directory holding a `package.json`, best first:
+ *
+ *   1. an explicit `resolved` input for that directory (`npm-package-lock`,
+ *      `pnpm-lock`, `yarn-lock`)                                  → `lockfile`;
+ *   2. a `pnpm-lock.yaml`: one manifest per importer, each with the packages
+ *      that importer reaches (circle-ir `parsePnpmLockImporterDependencies`);
+ *      a directory an importer stands for takes nothing further;
+ *   3. `package-lock.json` (or `npm-shrinkwrap.json`)            → `lockfile`;
+ *   4. `yarn.lock`                                               → `lockfile`;
+ *   5. the `package.json` itself, direct dependencies only        → `declared`.
+ *
+ * `node_modules/` is never read. A range, dist-tag or `unknown` version is
+ * counted as unresolved and never matched.
+ *
  * Besides, every Eclipse PDE / Tycho target definition (`*.target`) with a
  * `<location type="Maven">` is a manifest of its own, `declared`: on a Tycho
  * build the third-party versions live there, not in pom rows (cognium-dev
@@ -28,6 +42,10 @@ import { join, relative, resolve, sep } from 'node:path';
 import {
   MavenDeclaredIndex,
   isConcreteVersion,
+  parseNpmDependencies,
+  parseNpmLockDependencies,
+  parsePnpmLockImporterDependencies,
+  parseYarnLockDependencies,
   parseGradleDependencies,
   parseGradleLockfile,
   parseMavenDependencies,
@@ -40,7 +58,17 @@ import { SKIPPED_DIRECTORIES } from '../util/files.js';
 import { isTychoTarget, parseTychoTarget } from './tycho-target.js';
 import { fileInside, pathInside, realOrResolved } from '../roots.js';
 
-export type ResolvedKind = 'maven-dependency-tree' | 'maven-dependency-list' | 'gradle-lockfile' | 'cyclonedx-json';
+export type ResolvedKind =
+  | 'maven-dependency-tree' | 'maven-dependency-list' | 'gradle-lockfile' | 'cyclonedx-json'
+  | 'npm-package-lock' | 'pnpm-lock' | 'yarn-lock';
+
+const NPM_KINDS: ReadonlySet<ResolvedKind> = new Set(['npm-package-lock', 'pnpm-lock', 'yarn-lock']);
+
+/** The ecosystems this resolver reads, as the tool names them. */
+export type ToolEcosystem = 'maven' | 'npm';
+
+/** A concrete npm version: one SemVer, no range, tag or reference. */
+const NPM_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 export interface ResolvedInput {
   path: string;
@@ -93,8 +121,9 @@ const OTHER_ECOSYSTEMS: Record<string, string> = {
 
 const posix = (p: string): string => p.split(sep).join('/');
 
-function walk(root: string): { dirs: string[]; poms: PomFile[]; targets: string[]; seen: Set<string> } {
+function walk(root: string): { dirs: string[]; npmDirs: string[]; poms: PomFile[]; targets: string[]; seen: Set<string> } {
   const dirs: string[] = [];
+  const npmDirs: string[] = [];
   const targets: string[] = [];
   const poms: PomFile[] = [];
   const seen = new Set<string>();
@@ -108,6 +137,7 @@ function walk(root: string): { dirs: string[]; poms: PomFile[]; targets: string[
     }
     const names = new Set(entries.filter((e) => e.isFile()).map((e) => e.name));
     if (BUILD_FILES.some((b) => names.has(b)) || names.has('gradle.lockfile')) dirs.push(dir);
+    if (names.has('package.json') || names.has('pnpm-lock.yaml')) npmDirs.push(dir);
     if (names.has('pom.xml')) poms.push({ path: posix(relative(root, join(dir, 'pom.xml'))), content: readFileSync(join(dir, 'pom.xml'), 'utf8') });
     for (const n of names) if (OTHER_ECOSYSTEMS[n]) seen.add(OTHER_ECOSYSTEMS[n]);
     for (const n of names) if (isTychoTarget(n)) targets.push(join(dir, n));
@@ -118,7 +148,7 @@ function walk(root: string): { dirs: string[]; poms: PomFile[]; targets: string[
     }
   };
   visit(root, 0);
-  return { dirs: dirs.sort(), poms, targets: targets.sort(), seen };
+  return { dirs: dirs.sort(), npmDirs: npmDirs.sort(), poms, targets: targets.sort(), seen };
 }
 
 function parseCycloneDx(text: string): Dependency[] {
@@ -180,23 +210,32 @@ export interface ResolveOptions {
   includeDev: boolean;
   side: 'head' | 'baseline';
   resolved?: ResolvedInput[];
+  /** The ecosystems to resolve (default: Maven only, as before T-DT3.8). */
+  ecosystems?: ReadonlySet<ToolEcosystem>;
 }
 
 /** Resolve the tree at `root`. Paths in the answer are relative to it. */
 export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolution {
   const root = resolve(rootIn);
   const tree = realOrResolved(root);
-  const { dirs, poms, targets, seen } = walk(root);
+  const ecosystems = opts.ecosystems ?? new Set<ToolEcosystem>(['maven']);
+  const { dirs: walkedDirs, npmDirs, poms, targets: walkedTargets, seen } = walk(root);
+  const dirs = ecosystems.has('maven') ? walkedDirs : [];
+  const targets = ecosystems.has('maven') ? walkedTargets : [];
   const declaredIndex = poms.length > 0 ? new MavenDeclaredIndex(poms) : undefined;
-  const explicit = (opts.resolved ?? []).filter((r) => (r.side ?? 'head') === opts.side);
+  const explicitAll = (opts.resolved ?? []).filter((r) => (r.side ?? 'head') === opts.side);
+  const explicit = explicitAll.filter((r) => !NPM_KINDS.has(r.kind));
+  const explicitNpm = explicitAll.filter((r) => NPM_KINDS.has(r.kind));
   const resolution: ResolutionEntry[] = [];
   const deps: ManifestDep[] = [];
 
   // A caller-named input may point at a directory with no build file in it.
-  for (const r of explicit) {
-    const dir = resolve(root, r.applies_to ?? '.');
-    if (!pathInside(tree, dir)) continue;
-    if (!dirs.includes(dir)) dirs.push(dir);
+  if (ecosystems.has('maven')) {
+    for (const r of explicit) {
+      const dir = resolve(root, r.applies_to ?? '.');
+      if (!pathInside(tree, dir)) continue;
+      if (!dirs.includes(dir)) dirs.push(dir);
+    }
   }
   dirs.sort();
 
@@ -287,13 +326,111 @@ export function resolveTree(rootIn: string, opts: ResolveOptions): TreeResolutio
     resolution.push({ manifest, kind: 'declared', input: manifest, dependencies: found.length, unresolved, excludedDev: 0, transitive: false });
   }
 
-  const mavenSeen = dirs.length > 0 || resolution.some((r) => isTychoTarget(r.manifest.split('/').pop() ?? ''));
+  if (ecosystems.has('npm')) resolveNpm(root, tree, npmDirs, explicitNpm, opts.includeDev, resolution, deps);
+
+  const mavenSeen = walkedDirs.length > 0 || walkedTargets.length > 0;
   const ecosystemsSeen = [...new Set([...(mavenSeen ? ['Maven'] : []), ...seen])].sort();
-  const ecosystemsCovered = ecosystemsSeen.filter((e) => e === 'Maven');
+  const covered = new Set([...(ecosystems.has('maven') ? ['Maven'] : []), ...(ecosystems.has('npm') ? ['npm'] : [])]);
+  const ecosystemsCovered = ecosystemsSeen.filter((e) => covered.has(e));
   return {
     root,
     resolution: resolution.sort((a, b) => (a.manifest < b.manifest ? -1 : a.manifest > b.manifest ? 1 : 0)),
     deps,
-    coverage: { ecosystemsSeen, ecosystemsCovered, notCovered: ecosystemsSeen.filter((e) => e !== 'Maven') },
+    coverage: { ecosystemsSeen, ecosystemsCovered, notCovered: ecosystemsSeen.filter((e) => !covered.has(e)) },
   };
+}
+
+/** Parse one npm input by kind; `packageJson` lets a yarn.lock tell direct from transitive. */
+function parseNpmInput(kind: ResolvedKind, text: string, packageJson?: string): Dependency[] {
+  switch (kind) {
+    case 'yarn-lock':
+      return parseYarnLockDependencies(text, packageJson);
+    default:
+      return parseNpmLockDependencies(text);
+  }
+}
+
+/**
+ * npm resolution for every directory holding a `package.json` (see the
+ * header). Appends to `resolution` and `deps`. Every file read is a real
+ * path inside `tree` (S5); an importer directory outside it is skipped.
+ */
+function resolveNpm(
+  root: string,
+  tree: string,
+  npmDirs: string[],
+  explicit: ResolvedInput[],
+  includeDev: boolean,
+  resolution: ResolutionEntry[],
+  deps: ManifestDep[],
+): void {
+  const rel = (p: string): string => posix(relative(root, p));
+  const at = (dir: string, f: string): string => (rel(dir) ? `${rel(dir)}/${f}` : f);
+  const dirsIn = new Set(npmDirs);
+  for (const r of explicit) {
+    const dir = resolve(root, r.applies_to ?? '.');
+    if (pathInside(tree, dir)) dirsIn.add(dir);
+  }
+  const covered = new Set<string>();
+  const add = (manifest: string, kind: ResolutionEntry['kind'], input: string, found: Dependency[]): void => {
+    let excludedDev = 0;
+    let unresolved = 0;
+    let kept = 0;
+    for (const d of found) {
+      if (d.scope === 'dev' && !includeDev) {
+        excludedDev++;
+        continue;
+      }
+      if (!NPM_VERSION.test(d.version)) unresolved++;
+      kept++;
+      deps.push({ dep: d, manifest, declared: null });
+    }
+    resolution.push({ manifest, kind, input, dependencies: kept, unresolved, excludedDev, transitive: kind !== 'declared' });
+  };
+  const importers = (lockDir: string, input: string, text: string): void => {
+    for (const imp of parsePnpmLockImporterDependencies(text)) {
+      const dir = resolve(lockDir, imp.importer);
+      if (!pathInside(tree, dir)) continue;
+      covered.add(dir);
+      add(at(dir, 'package.json'), 'lockfile', input, imp.dependencies);
+    }
+  };
+  // Caller-named pnpm lockfiles first: their importers are covered like a found one's.
+  for (const r of explicit.filter((x) => x.kind === 'pnpm-lock')) {
+    const dir = resolve(root, r.applies_to ?? '.');
+    if (!pathInside(tree, dir)) continue;
+    importers(dir, r.path, readFileSync(resolve(root, r.path), 'utf8'));
+  }
+  for (const dir of [...dirsIn].sort()) {
+    if (covered.has(dir)) continue;
+    const pnpm = fileInside(tree, join(dir, 'pnpm-lock.yaml'));
+    // A caller-named input for the directory wins over the lockfile found there.
+    if (pnpm && !explicit.some((x) => resolve(root, x.applies_to ?? '.') === dir)) {
+      importers(dir, at(dir, 'pnpm-lock.yaml'), readFileSync(pnpm, 'utf8'));
+    }
+  }
+  for (const dir of [...dirsIn].sort()) {
+    if (covered.has(dir)) continue;
+    const pkgReal = fileInside(tree, join(dir, 'package.json'));
+    const pkgText = pkgReal ? readFileSync(pkgReal, 'utf8') : undefined;
+    const manifest = at(dir, 'package.json');
+    const named = explicit.find((x) => x.kind !== 'pnpm-lock' && resolve(root, x.applies_to ?? '.') === dir);
+    if (named) {
+      add(manifest, 'lockfile', named.path, parseNpmInput(named.kind, readFileSync(resolve(root, named.path), 'utf8'), pkgText));
+      continue;
+    }
+    const lock = ['package-lock.json', 'npm-shrinkwrap.json']
+      .map((f) => ({ f, real: fileInside(tree, join(dir, f)) }))
+      .find((o) => o.real !== undefined);
+    if (lock?.real) {
+      add(manifest, 'lockfile', at(dir, lock.f), parseNpmLockDependencies(readFileSync(lock.real, 'utf8')));
+      continue;
+    }
+    const yarn = fileInside(tree, join(dir, 'yarn.lock'));
+    if (yarn) {
+      add(manifest, 'lockfile', at(dir, 'yarn.lock'), parseYarnLockDependencies(readFileSync(yarn, 'utf8'), pkgText));
+      continue;
+    }
+    if (pkgText !== undefined) add(manifest, 'declared', manifest, parseNpmDependencies(pkgText));
+  }
 }

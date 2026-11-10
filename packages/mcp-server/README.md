@@ -81,7 +81,7 @@ The same stdio config is bundled in the [Cognium SAST plugin](../../plugins/cogn
 | `dependency_calls` | For a Maven dependency bump: every call into the artifact, the tests that reach each one, and the sites that cannot be ruled in or out. Java. Computed by `@cognium/code-facts` 0.1.0, installed with the server. |
 | `find_dead_code` | Per declaration, the engine's `dead-code@0.1` fact (`live`, `may-be-live` with reasons, or `dead`, with the paths from an entry and the first test that reaches it), and a `decision` under the rule "no inferred edge decides", against the roots listed in `entrySet`. TypeScript, JavaScript, Java, Python, Go. |
 | `removal_reach` | For two checked-out trees, every removed declaration with what reached it at the base (`removal-reach@0.1`; moves and renames listed apart), each with the same `decision`, and `allUnreachable` over the change. TypeScript, JavaScript, Java, Python, Go. |
-| `analyze_dependencies` | Known advisories in a Java project's resolved dependencies (Maven, Gradle), matched against an OSV advisory snapshot you supply; with `baseline_root`, what a change removed and added. See below. |
+| `analyze_dependencies` | Known advisories in a project's resolved dependencies (Maven, Gradle; npm, pnpm, Yarn), matched against the OSV advisory snapshot you supply per ecosystem; with `baseline_root`, what a change removed and added. See below. |
 | `refresh` | Manually invalidate the cache for one project or every project. |
 
 ### `analyze_dependencies`
@@ -94,6 +94,19 @@ file itself (`kind: "declared"`, direct dependencies only). It then matches
 every coordinate against the advisory snapshot at `advisory_db` — a directory
 of OSV records, as `unzip Maven/all.zip` from OSV.dev leaves it; default
 `<project_root>/.cognium/advisory/osv-maven`.
+
+npm projects (`ecosystems: ["npm"]`, or by default when the tree has npm
+manifests and an npm snapshot is present) resolve per directory holding a
+`package.json`, best input first: a caller-named file (`resolved` with kind
+`npm-package-lock`, `pnpm-lock` or `yarn-lock`); a `pnpm-lock.yaml`, read as
+one manifest per workspace importer, each with only the packages that importer
+reaches; `package-lock.json`; `yarn.lock`; else `package.json` itself (direct,
+declared). A range, dist-tag or `unknown` version is counted as unresolved and
+never matched, and `node_modules/` is never read. The npm snapshot is
+`advisory_dbs.npm` (`unzip npm/all.zip`; default
+`<project_root>/.cognium/advisory/osv-npm`), and npm versions compare by
+SemVer. With npm in the answer, `advisoryDb` lists one entry per ecosystem; a
+Maven-only answer is unchanged.
 
 It never downloads a snapshot and never runs a build: the answer depends only
 on the tree, the snapshot and this version, and carries the snapshot's
