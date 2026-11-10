@@ -1,6 +1,7 @@
 /**
- * Advisory snapshot: a directory of OSV records (as `unzip Maven/all.zip`
- * leaves it), read once per content and kept indexed in memory.
+ * Advisory snapshot: a directory of OSV records (as `unzip Maven/all.zip`, or
+ * `npm/all.zip`, leaves it), read once per content and kept indexed in memory,
+ * one index per ecosystem the caller reads it for.
  *
  * The snapshot is an input the caller pins; this module never downloads
  * anything. Its identity is a digest over the records it holds, so the same
@@ -63,13 +64,13 @@ export class SnapshotCache {
 
   constructor(private readonly capacity = 2) {}
 
-  /** Read (or reuse) the snapshot at `dir`. Throws `SnapshotError` with one line. */
-  load(dir: string): { snapshot: Snapshot; cacheHit: boolean } {
+  /** Read (or reuse) the snapshot at `dir` for `ecosystem` (OSV name). Throws `SnapshotError` with one line. */
+  load(dir: string, ecosystem = 'Maven'): { snapshot: Snapshot; cacheHit: boolean } {
     const names = jsonFiles(dir);
     const statKey = statKeyOf(dir, names);
     const known = this.byDir.get(dir);
     if (known && known.statKey === statKey) {
-      const index = this.byDigest.get(known.digest);
+      const index = this.byDigest.get(`${ecosystem}\0${known.digest}`);
       if (index) return { snapshot: { path: dir, digest: known.digest, files: known.files, index }, cacheHit: true };
     }
 
@@ -83,7 +84,8 @@ export class SnapshotCache {
     const digest = `sha256:${createHash('sha256').update(lines.join('')).digest('hex')}`;
     this.byDir.set(dir, { statKey, digest, files: names.length });
 
-    let index = this.byDigest.get(digest);
+    const key = `${ecosystem}\0${digest}`;
+    let index = this.byDigest.get(key);
     const cacheHit = index !== undefined;
     if (!index) {
       const records: OsvRecord[] = [];
@@ -92,12 +94,12 @@ export class SnapshotCache {
         if (r) records.push(r);
       }
       if (records.length === 0) throw new SnapshotError(`advisory_db holds no OSV records: ${dir}`);
-      index = buildAdvisoryIndex(records, 'Maven');
-      this.byDigest.set(digest, index);
+      index = buildAdvisoryIndex(records, ecosystem);
+      this.byDigest.set(key, index);
       while (this.byDigest.size > this.capacity) this.byDigest.delete(this.byDigest.keys().next().value as string);
     } else {
-      this.byDigest.delete(digest);
-      this.byDigest.set(digest, index);
+      this.byDigest.delete(key);
+      this.byDigest.set(key, index);
     }
     return { snapshot: { path: dir, digest, files: names.length, index }, cacheHit };
   }
