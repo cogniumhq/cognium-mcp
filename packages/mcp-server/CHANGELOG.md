@@ -29,6 +29,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `advisoryDb` may be a list), so `verify-install --same-tools-as` reports them
   as breaking: the next release says how it treats them.
 
+## [0.9.1] - 2026-11-15
+
+Tested against `circle-ir` **4.21.0** (was 4.20.0). The optional module to pair
+it with is `circle-ir-ai` **4.32.0**, built on 4.21.0 (the release train:
+`npm run check:train`). A patch from the 0.9.0 release commit: the pin moves
+and nothing else, so the tool list and every schema are the same as 0.9.0.
+`analyze_dependencies` reading npm projects (#52, on `main`) is not in this
+release.
+
+### Changed
+
+- **`circle-ir` pin 4.20.0 → 4.21.0** (exact). The engine's public API change
+  is additive. Answers change with it (circle-ir CHANGELOG [4.21.0]): new JS/TS
+  passes (`csrf-samesite-none-session`, CWE-352; `sensitive-data-in-log`,
+  CWE-532), Java and JS taint fixes that add true positives and clear false
+  positives, Maven reactor and Gradle multi-project resolved sets per module,
+  and `facts@2` as the default fact schema. `@cognium/code-facts` 0.1.0 needs `circle-ir` `>=4.18.0`, so a
+  single `circle-ir` is still installed. circle-ir 4.21.0's optional
+  dependency is `apache-arrow` 21.2.0 (was 21.1.0).
+- **Optional peer `circle-ir-ai` `>=4.31.0` → `>=4.32.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai 4.31.0 (on
+  4.20.0) would silently drop the module's tools. **Upgrade circle-ir-ai to
+  4.32.0 together with the server.**
+
 ## [0.9.0] - 2026-11-08
 
 Tested against `circle-ir` **4.20.0** (was 4.18.1; 4.19.0 is skipped). The
