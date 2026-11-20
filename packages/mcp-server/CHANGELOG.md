@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-20
+
+Tested against `circle-ir` **4.23.0** (was 4.21.0; 4.21.1 and 4.22.0 are
+skipped). The optional module to pair it with is `circle-ir-ai` **4.34.0**,
+built on 4.23.0 (the release train: `npm run check:train`). A patch from the
+0.9.1 release commit: the pin moves and nothing else, so the tool list and
+every schema are the same as 0.9.1. `analyze_dependencies` reading npm
+projects (#52, on `main`) is still not in this release.
+
+### Changed
+
+- **`circle-ir` pin 4.21.0 → 4.23.0** (exact). Answers change with it
+  (circle-ir CHANGELOG [4.21.1], [4.22.0], [4.23.0]): new JS/TS passes
+  (`prototype-pollution`, CWE-1321; `missing-auth-middleware`, CWE-862;
+  `hardcoded-secret-argument`, CWE-798; `redos-regex-literal`, CWE-1333),
+  cookie-sourced and `Class.forName` deserialization (CWE-502), value-checked
+  Java XXE hardening, an HTML encoder no longer clearing SQL injection and
+  other non-XSS sinks, and JS/TS sanitizer credit for SSRF allow-list
+  wrappers, same-site redirect guards, fixed templates and `JSON.stringify`
+  in logs. `@cognium/code-facts` 0.1.0 needs `circle-ir` `>=4.18.0`, so a
+  single `circle-ir` is still installed.
+- **Optional peer `circle-ir-ai` `>=4.32.0` → `>=4.34.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai 4.32.0 or
+  4.33.0 (both on 4.21.0) would silently drop the module's tools. **Upgrade
+  circle-ir-ai to 4.34.0 together with the server.**
+
 ## [0.9.1] - 2026-11-15
 
 Tested against `circle-ir` **4.21.0** (was 4.20.0). The optional module to pair
