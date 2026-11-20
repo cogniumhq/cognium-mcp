@@ -22,6 +22,10 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/coverage/**',
       '**/*.d.ts',
+      // Local worktrees kept inside the checkout (`.wt/<name>`): each has its own
+      // tsconfig, and typescript-eslint refuses every file when it finds two
+      // tsconfig roots, which stops `release:check` before a publish.
+      '.wt/**',
       // Code the tests analyse, not code this repo runs: it is deliberately
       // vulnerable and in whatever style the case needs.
       '**/tests/fixtures/**/project/**',
