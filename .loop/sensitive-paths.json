@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "tierA": [
+    ".claude-plugin/",
+    ".cursor-plugin/",
+    "plugins/*/.claude-plugin/",
+    "plugins/*/.cursor-plugin/",
+    "plugins/*/.mcp.json",
+    "plugins/*/mcp.json",
+    "plugins/*/hooks/",
+    "packages/mcp-server/package.json",
+    "scripts/publish-gate.mjs",
+    "scripts/release-check.mjs",
+    "scripts/verify-install.mjs",
+    "scripts/check-pins.mjs",
+    "scripts/check-release-train.mjs",
+    "scripts/self-scan.mjs",
+    "packages/mcp-server/tests/one-answer.test.ts",
+    "packages/mcp-server/tests/three-state.test.ts",
+    "packages/mcp-server/tests/modules.test.ts",
+    "packages/mcp-server/tests/pack-manifest.test.ts",
+    ".github/workflows/ci.yml",
+    "plugins/"
+  ]
+}
