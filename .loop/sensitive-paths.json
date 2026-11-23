@@ -19,6 +19,7 @@
     "packages/mcp-server/tests/three-state.test.ts",
     "packages/mcp-server/tests/modules.test.ts",
     "packages/mcp-server/tests/pack-manifest.test.ts",
-    ".github/workflows/ci.yml"
+    ".github/workflows/ci.yml",
+    "plugins/"
   ]
 }
