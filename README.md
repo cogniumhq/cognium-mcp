@@ -53,7 +53,7 @@ separate checks:
 | module refusal | a module on another `circle-ir` minor is refused and the built-in tools serve |
 | protocol | the handshake, valid JSON Schema for every tool, and no side effects on import |
 | manifest | what the tarball contains, and that it carries only the MIT licence |
-| install | a packed build installs into an empty directory and serves the same tools as the last release |
+| install | a packed build installs into an empty directory and serves the same tools as its base (a pull request) or the last release (a release) |
 | pin check | `circle-ir` is pinned exactly, resolved once, and named in the changelog |
 | self-scan | a published release of the scanner finds nothing high or critical in the server's own source, beyond a short, checked list of known false positives |
 

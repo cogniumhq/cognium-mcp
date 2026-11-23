@@ -20,7 +20,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * exits with one chosen code. Everything else — the branching, the messages,
  * the major exemption — is the real script.
  */
-function runWith({ exitCode, version, published }) {
+function runWith({ exitCode, version, published, env = {}, uncomparedExitCode = exitCode }) {
   const root = mkdtempSync(join(tmpdir(), 'release-check-'));
   mkdirSync(join(root, 'packages', 'mcp-server'), { recursive: true });
   mkdirSync(join(root, 'scripts'), { recursive: true });
@@ -34,11 +34,15 @@ function runWith({ exitCode, version, published }) {
   // The stub is imported by the script under test AND run by it as a child.
   // It must therefore exit only when it is the entry point — exiting on import
   // would kill `release-check.mjs` before it reached the branch being tested.
+  // Called without `--same-tools-as`, it exits `uncomparedExitCode`, so a test
+  // can tell whether a comparison was asked for.
   writeFileSync(
     join(root, 'scripts', 'verify-install.mjs'),
     `import { pathToFileURL } from 'node:url';\n` +
       `export const EXIT = ${JSON.stringify(EXIT)};\n` +
-      `if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exit(${exitCode});\n`,
+      `const compared = process.argv.includes('--same-tools-as');\n` +
+      `if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) ` +
+      `process.exit(compared ? ${exitCode} : ${uncomparedExitCode});\n`,
   );
   // `npm view <name> version` and `npm pack` are replaced by a stub `npm` on PATH.
   const bin = join(root, 'bin');
@@ -67,7 +71,7 @@ function runWith({ exitCode, version, published }) {
   const result = spawnSync('node', ['scripts/release-check.mjs'], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    env: { ...process.env, RELEASE_CHECK: '', ...env, PATH: `${bin}:${process.env.PATH}` },
   });
   return { status: result.status, out: `${result.stdout}${result.stderr}` };
 }
@@ -130,4 +134,31 @@ test('republishing the same version is refused before anything is installed', ()
   const { status, out } = runWith({ exitCode: EXIT.ok, version: '0.4.0', published: '0.4.0' });
   assert.equal(status, 1);
   assert.match(out, /already published; bump the version first/);
+});
+
+// CI is not a release: main sits at the published version between releases,
+// and a tool-list change merged there waits for the release to version it.
+// Neither is something a pull request did.
+test('in CI, the published version on main is not refused, and npm is not compared', () => {
+  const { status, out } = runWith({
+    exitCode: EXIT.toolListBreaks,
+    uncomparedExitCode: EXIT.ok,
+    version: '0.4.0',
+    published: '0.4.0',
+    env: { RELEASE_CHECK: 'ci' },
+  });
+  assert.equal(status, 0);
+  assert.match(out, /not a release/);
+  assert.doesNotMatch(out, /already published/);
+});
+
+test('in CI, a pack that does not install still fails', () => {
+  const { status, out } = runWith({
+    exitCode: EXIT.didNotInstall,
+    version: '0.4.0',
+    published: '0.4.0',
+    env: { RELEASE_CHECK: 'ci' },
+  });
+  assert.equal(status, 1);
+  assert.match(out, /did not INSTALL/);
 });
