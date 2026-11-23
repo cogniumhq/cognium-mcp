@@ -146,15 +146,46 @@ jobs:
       - run: npm ci
       - run: npm run build
       # Pack what would be published, install it into an empty directory the
-      # way a user does, and compare its tools/list with the release on npm.
-      # A removed or renamed tool, or a changed schema, fails here: the tool
-      # list is the API, and breaking it takes a major version on purpose.
-      - name: Pack, install and compare tools/list
+      # way a user does, and compare its tools/list with a baseline. A removed
+      # or renamed tool, or a changed schema, fails: the tool list is the API,
+      # and breaking it takes a major version on purpose.
+      - name: Pack
         run: |
           set -euo pipefail
-          npm pack --workspace packages/mcp-server --pack-destination "$RUNNER_TEMP" >/dev/null
-          tarball="$(ls "$RUNNER_TEMP"/cognium-mcp-server-*.tgz)"
-          node scripts/verify-install.mjs "$tarball" --same-tools-as @cognium/mcp-server@latest
+          mkdir -p "$RUNNER_TEMP/head"
+          npm pack --workspace packages/mcp-server --pack-destination "$RUNNER_TEMP/head" >/dev/null
+      # A pull request is compared with its base: a tool-list change already
+      # on main is the next release's to version, not this pull request's.
+      - name: Check out the base of the pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - name: Pack the base
+        if: github.event_name == 'pull_request'
+        working-directory: base
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          mkdir -p "$RUNNER_TEMP/base"
+          npm pack --workspace packages/mcp-server --pack-destination "$RUNNER_TEMP/base" >/dev/null
+      - name: Install and compare tools/list with the base
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          node scripts/verify-install.mjs "$(ls "$RUNNER_TEMP"/head/*.tgz)" --same-tools-as "$(ls "$RUNNER_TEMP"/base/*.tgz)"
+      # Against the last release: what the next release has to version. It
+      # gates a manual run (the pre-release check, after the bump) and only
+      # reports on pull requests and pushes, where main may already hold an
+      # unreleased change. `npm publish` still refuses a break through
+      # `prepublishOnly` unless the version is a new major.
+      - name: Install and compare tools/list with the last release
+        continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          node scripts/verify-install.mjs "$(ls "$RUNNER_TEMP"/head/*.tgz)" --same-tools-as @cognium/mcp-server@latest
 
   publish-gate:
     name: publish gate — every required check
@@ -162,7 +193,12 @@ jobs:
     timeout-minutes: 25
     # The same list `npm publish` runs through `prepublishOnly`, so a pull
     # request and a publish cannot disagree about what is required. Publishing
-    # itself stays by hand: nothing here publishes.
+    # itself stays by hand: nothing here publishes. A pull request or a push is
+    # not a release, so the install gate there installs and serves without
+    # checking the version or comparing with npm (see scripts/release-check.mjs);
+    # a manual run checks both, as `npm publish` does.
+    env:
+      RELEASE_CHECK: ${{ github.event_name != 'workflow_dispatch' && 'ci' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

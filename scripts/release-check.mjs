@@ -16,6 +16,16 @@
  * compared a tool list. A publish gate that passes because its check never
  * ran is worse than no gate. Only `EXIT.toolListBreaks` is excusable now;
  * everything else says what actually happened and fails.
+ *
+ * **CI is not a release.** CI runs this on every pull request and every push
+ * to main, through the publish gate. Main carries the version last published
+ * until a release commit bumps it, and a tool-list change merged to main waits
+ * there for the release that decides its version. Against npm, both fail every
+ * pull request for something none of them did. With `RELEASE_CHECK=ci` the pack
+ * is installed and served — the part a pull request can break — and the
+ * version and the comparison with npm are left to the release, where
+ * `prepublishOnly` runs this without it. CI's install job compares each pull
+ * request's tools with its base.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -33,6 +43,7 @@ delete env.npm_config_dry_run;
 const manifest = JSON.parse(readFileSync('packages/mcp-server/package.json', 'utf8'));
 const published = execFileSync('npm', ['view', manifest.name, 'version'], { encoding: 'utf8', env }).trim();
 const major = (version) => Number(version.split('.')[0]);
+const notARelease = process.env.RELEASE_CHECK === 'ci';
 
 const dir = mkdtempSync(join(tmpdir(), 'release-check-'));
 try {
@@ -41,18 +52,23 @@ try {
     env,
   });
   const tarball = join(dir, readdirSync(dir).find((name) => name.endsWith('.tgz')));
-  console.log(`release check: ${manifest.name} ${manifest.version} against ${published} on npm`);
+  const args = ['scripts/verify-install.mjs', tarball];
 
-  if (manifest.version === published) {
-    console.error(`release check: ${manifest.version} is already published; bump the version first`);
-    process.exit(1);
+  if (notARelease) {
+    console.log(
+      `release check (RELEASE_CHECK=ci, not a release): ${manifest.name} ${manifest.version} installs and serves; ` +
+        `the version and the tools against ${published} on npm are checked at release`,
+    );
+  } else {
+    console.log(`release check: ${manifest.name} ${manifest.version} against ${published} on npm`);
+    if (manifest.version === published) {
+      console.error(`release check: ${manifest.version} is already published; bump the version first`);
+      process.exit(1);
+    }
+    args.push('--same-tools-as', `${manifest.name}@${published}`);
   }
 
-  const verify = spawnSync(
-    'node',
-    ['scripts/verify-install.mjs', tarball, '--same-tools-as', `${manifest.name}@${published}`],
-    { stdio: 'inherit', env },
-  );
+  const verify = spawnSync('node', args, { stdio: 'inherit', env });
 
   if (verify.error) {
     console.error(`release check: could not run the install check — ${verify.error.message}`);
