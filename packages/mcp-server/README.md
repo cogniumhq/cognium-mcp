@@ -457,10 +457,11 @@ decides what is *listed*, and the terms carry the grant.
   schema pins the top-level envelope; nested engine objects are open, so the
   engine may add a field inside them in a minor. An `isError` result carries
   text only.
-- **Annotations** are declared on every tool in `tools/list`. Thirteen are
-  `readOnlyHint: true`; none reaches the network (`openWorldHint: false`) or
-  deletes anything (`destructiveHint: false`). `refresh` is not read-only: it
-  writes no file, but it clears the server's in-memory cache.
+- **Annotations** are declared on every tool in `tools/list`. Sixteen of the
+  seventeen are `readOnlyHint: true`; none reaches the network
+  (`openWorldHint: false`) or deletes anything (`destructiveHint: false`).
+  `refresh` is not read-only: it writes no file, but it clears the server's
+  in-memory cache.
 - **Errors.** A malformed request gets a JSON-RPC error: `-32602` for bad
   parameters or a tool that does not exist, `-32601` for an unknown method. A
   well-formed call a tool cannot serve — an unknown sink type, a missing path —

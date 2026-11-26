@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `advisoryDb` may be a list), so `verify-install --same-tools-as` reports them
   as breaking: the next release says how it treats them.
 
+### Fixed
+
+- The README says sixteen of the seventeen built-in tools are
+  `readOnlyHint: true` (it said thirteen); `refresh` is the one that is not
+  (#57). A test now holds the README to the tool list.
+
 ## [0.9.2] - 2026-11-20
 
 Tested against `circle-ir` **4.23.0** (was 4.21.0; 4.21.1 and 4.22.0 are

@@ -79,6 +79,13 @@ interface CallResult {
   content: Array<{ type: string; text: string }>;
 }
 
+/** How the README spells a tool count, indexed by the number. */
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+  'nineteen', 'twenty',
+];
+
 /** A call for each tool that completes without a finding id from an earlier scan. */
 function callsFor(projectRoot: string): Array<[string, Record<string, unknown>]> {
   return [
@@ -114,6 +121,18 @@ describe('annotations', () => {
     // `refresh` drops cache entries: no file is touched, but the server's
     // state changes, so it does not make the claim.
     expect(notReadOnly).toEqual(['refresh']);
+  });
+
+  it('match what the README says about them', async () => {
+    const { tools } = await client.listTools();
+    const readOnly = tools.filter((t) => t.annotations?.readOnlyHint === true).length;
+    const readme = readFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), 'utf8');
+    const claim = /\. (\w+) of the\s+(\w+) are\s+`readOnlyHint: true`/.exec(readme);
+    expect(claim, 'the README states the readOnlyHint count').not.toBeNull();
+    expect([NUMBER_WORDS.indexOf(claim![1].toLowerCase()), NUMBER_WORDS.indexOf(claim![2])]).toEqual([
+      readOnly,
+      tools.length,
+    ]);
   });
 
   it('are true: no call writes, deletes or touches a file in the project', async () => {
