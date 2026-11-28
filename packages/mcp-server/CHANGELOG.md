@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-27
+
+Tested against `circle-ir` **4.24.0** (was 4.23.0). The optional module to
+pair it with is `circle-ir-ai` **4.40.0**, built on 4.24.0 (the release train:
+`npm run check:train`). A patch from the 0.9.2 release commit: the pin moves
+and nothing else, so the tool list and every schema are the same as 0.9.2.
+`analyze_dependencies` reading npm projects (#52, on `main`) is still not in
+this release.
+
+### Changed
+
+- **`circle-ir` pin 4.23.0 → 4.24.0** (exact). The engine's public API change
+  is additive. Answers change with it (circle-ir CHANGELOG [4.24.0]):
+  `find_dead_code` lifts a module or class to `may-be-live` when one of its
+  members is not dead, and a module-level field follows its module; Python
+  graph routes compose Django `include()` prefixes and take DRF verbs in place
+  of `ANY`; JS/TS navigation follows `.call` / `.apply` / `.bind`; Java enum
+  members are declared in `types`, method references are call sites, and
+  calls in field initializers are attributed to `<clinit>` / `<init>`; Maven
+  `${property}` versions declared in the same pom resolve, and pom comments
+  are ignored; finding ids are stable across re-scans; and a set of Java and
+  JS/TS taint fixes, among them `Class.forName` reported once, as
+  `code_injection` (CWE-94), no longer also as `deserialization` (CWE-502).
+  `@cognium/code-facts` 0.1.0 needs `circle-ir` `>=4.18.0`, so a single
+  `circle-ir` is still installed.
+- **Optional peer `circle-ir-ai` `>=4.34.0` → `>=4.40.0`.** A module built on
+  another `circle-ir` minor is refused at load, so circle-ir-ai 4.34.0 to
+  4.38.0 (all on 4.23.0) would silently drop the module's tools. **Upgrade
+  circle-ir-ai to 4.40.0 together with the server.**
+
 ## [0.9.2] - 2026-11-20
 
 Tested against `circle-ir` **4.23.0** (was 4.21.0; 4.21.1 and 4.22.0 are
